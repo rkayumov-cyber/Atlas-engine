@@ -1,0 +1,15 @@
+{
+  "metadata": {
+    "chain_name": "AtlasPrime",
+    "symbol": "ATL",
+    "genesis_time": 1700000000
+  },
+  "initial_distribution": {
+    "049d5b41...": 1000000.0,
+    "04ec231d...": 500000.0
+  },
+  "parameters": {
+    "block_reward": 50.0,
+    "difficulty_zeros": 4
+  }
+}

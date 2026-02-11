@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atlas Engine — Block Explorer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .pulse { animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .5; }
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+    <h1 class="text-2xl font-bold tracking-tight">Atlas Engine <span class="text-indigo-400">Explorer</span></h1>
+    <span id="clock" class="text-sm text-gray-500"></span>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-8 space-y-8">
+
+    <!-- Network Health -->
+    <section>
+      <h2 class="text-lg font-semibold mb-4">Network Health</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4" id="health-cards"></div>
+    </section>
+
+    <!-- Recent Blocks -->
+    <section>
+      <h2 class="text-lg font-semibold mb-4">Recent Blocks</h2>
+      <div class="overflow-x-auto rounded-lg border border-gray-800">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-900 text-gray-400 uppercase text-xs">
+            <tr>
+              <th class="px-4 py-3 text-left">Index</th>
+              <th class="px-4 py-3 text-left">Timestamp</th>
+              <th class="px-4 py-3 text-left">Transactions</th>
+              <th class="px-4 py-3 text-left">Proof</th>
+              <th class="px-4 py-3 text-left">Previous Hash</th>
+            </tr>
+          </thead>
+          <tbody id="blocks-body" class="divide-y divide-gray-800"></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const NODES = [
+      { name: "Node 1", health: "/api/node1/health", chain: "/api/node1/chain" },
+      { name: "Node 2", health: "/api/node2/health", chain: "/api/node2/chain" },
+      { name: "Node 3", health: "/api/node3/health", chain: "/api/node3/chain" },
+    ];
+
+    // -- Clock ------------------------------------------------------------
+    function tickClock() {
+      document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+    }
+    setInterval(tickClock, 1000);
+    tickClock();
+
+    // -- Health Cards -----------------------------------------------------
+    async function refreshHealth() {
+      const container = document.getElementById("health-cards");
+      container.innerHTML = "";
+      for (const node of NODES) {
+        let status = "Offline";
+        let color = "red";
+        let chainLen = "—";
+        try {
+          const res = await fetch(node.health, { signal: AbortSignal.timeout(3000) });
+          if (res.ok) {
+            const data = await res.json();
+            status = "Online";
+            color = "green";
+            chainLen = data.chain_length;
+          }
+        } catch (_) { /* offline */ }
+
+        container.innerHTML += `
+          <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-${color}-500 ${status === 'Online' ? 'pulse' : ''}"></span>
+              <span class="font-medium">${node.name}</span>
+            </div>
+            <p class="text-xs text-gray-400">Status: <span class="text-${color}-400 font-semibold">${status}</span></p>
+            <p class="text-xs text-gray-400">Chain length: <span class="font-mono">${chainLen}</span></p>
+          </div>`;
+      }
+    }
+
+    // -- Block Table ------------------------------------------------------
+    async function refreshBlocks() {
+      const tbody = document.getElementById("blocks-body");
+      for (const node of NODES) {
+        try {
+          const res = await fetch(node.chain, { signal: AbortSignal.timeout(3000) });
+          if (!res.ok) continue;
+          const data = await res.json();
+          const blocks = data.chain.slice(-5).reverse();
+          tbody.innerHTML = blocks.map(b => `
+            <tr class="hover:bg-gray-900/60 transition">
+              <td class="px-4 py-3 font-mono text-indigo-400">#${b.index}</td>
+              <td class="px-4 py-3 text-gray-400">${new Date(b.timestamp * 1000).toLocaleString()}</td>
+              <td class="px-4 py-3">${b.transactions.length}</td>
+              <td class="px-4 py-3 font-mono">${b.proof}</td>
+              <td class="px-4 py-3 font-mono text-xs truncate max-w-[200px]">${b.previous_hash}</td>
+            </tr>`).join("");
+          return; // success — use first responding node
+        } catch (_) { /* try next */ }
+      }
+      tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-6 text-center text-gray-500">No nodes reachable</td></tr>`;
+    }
+
+    // -- Polling ----------------------------------------------------------
+    async function refresh() {
+      await Promise.all([refreshHealth(), refreshBlocks()]);
+    }
+    refresh();
+    setInterval(refresh, 5000);
+  </script>
+
+</body>
+</html>

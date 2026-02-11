@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Atlas Engine — Network Monitor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+    #network-canvas { background: radial-gradient(ellipse at center, #0f172a 0%, #020617 100%); }
+    .feed { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+    .feed::-webkit-scrollbar { width: 4px; }
+    .feed::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+    @keyframes ping-ring { 0% { transform: scale(1); opacity: 0.8; } 100% { transform: scale(2.5); opacity: 0; } }
+    .ping-ring { animation: ping-ring 1.5s ease-out infinite; }
+    @keyframes slide-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .slide-in { animation: slide-in 0.25s ease-out; }
+    @keyframes flash-green { 0% { background-color: rgba(34,197,94,0.15); } 100% { background-color: transparent; } }
+    .flash-green { animation: flash-green 1s ease-out; }
+    .btn { @apply px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 border; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { @apply bg-indigo-600 border-indigo-500 hover:bg-indigo-500 text-white; }
+    .btn-success { @apply bg-emerald-600/20 border-emerald-500/40 hover:bg-emerald-600/30 text-emerald-400; }
+    .btn-warning { @apply bg-amber-600/20 border-amber-500/40 hover:bg-amber-600/30 text-amber-400; }
+    .btn-danger { @apply bg-red-600/20 border-red-500/40 hover:bg-red-600/30 text-red-400; }
+    .modal-backdrop { background: rgba(2,6,23,0.8); backdrop-filter: blur(4px); }
+    .sparkline-bar { transition: height 0.3s ease; }
+  </style>
+</head>
+<body class="bg-slate-950 text-gray-100 min-h-screen overflow-x-hidden">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/60 px-6 py-3 flex items-center justify-between backdrop-blur sticky top-0 z-50 bg-slate-950/90">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-sm">A</div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight">Network Monitor</h1>
+        <p class="text-xs text-slate-500">Atlas Engine — Real-time Visualization</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <button onclick="openModal('mine-modal')" class="btn btn-success">Mine Block</button>
+      <button onclick="openModal('balance-modal')" class="btn btn-warning">Check Balance</button>
+      <button onclick="triggerConsensus()" class="btn btn-primary" id="consensus-btn">Sync Consensus</button>
+      <div class="flex items-center gap-2 text-xs text-slate-400">
+        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse" id="conn-dot"></span>
+        <span id="connection-status">Connected</span>
+      </div>
+      <span id="clock" class="text-xs text-slate-500 mono"></span>
+    </div>
+  </header>
+
+  <main class="flex flex-col lg:flex-row h-[calc(100vh-57px)]">
+
+    <!-- ============ LEFT PANEL: Visualization ============ -->
+    <div class="flex-1 flex flex-col min-w-0">
+
+      <!-- Stats Bar (8 metrics) -->
+      <div class="grid grid-cols-4 xl:grid-cols-8 gap-2 p-3 border-b border-slate-800/40">
+        <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Nodes</p>
+          <p class="text-lg font-bold mono text-green-400" id="stat-nodes">0/3</p>
+        </div>
+        <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Max Chain</p>
+          <p class="text-lg font-bold mono text-indigo-400" id="stat-blocks">0</p>
+        </div>
+        <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Total TXs</p>
+          <p class="text-lg font-bold mono text-amber-400" id="stat-txs">0</p>
+        </div>
+        <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Tokens Mined</p>
+          <p class="text-lg font-bold mono text-emerald-400" id="stat-tokens">0.0</p>
+        </div>
+        <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Avg Block Time</p>
+          <p class="text-lg font-bold mono text-cyan-400" id="stat-blocktime">--</p>
+        </div>
+        <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">TPS (recent)</p>
+          <p class="text-lg font-bold mono text-pink-400" id="stat-tps">0.0</p>
+        </div>
+        <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Chain Sync</p>
+          <p class="text-lg font-bold mono" id="stat-sync">--</p>
+        </div>
+        <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Uptime</p>
+          <p class="text-lg font-bold mono text-slate-300" id="stat-uptime">0:00</p>
+        </div>
+      </div>
+
+      <!-- Network Graph -->
+      <div class="flex-1 relative">
+        <svg id="network-canvas" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <filter id="glow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            <filter id="glow-strong"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          </defs>
+          <g id="links-layer"></g>
+          <g id="particles-layer"></g>
+          <g id="nodes-layer"></g>
+        </svg>
+
+        <!-- Legend -->
+        <div class="absolute bottom-4 left-4 bg-slate-900/80 backdrop-blur rounded-lg border border-slate-800/60 px-3 py-2 text-[10px] text-slate-400 space-y-1">
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-green-500"></span> Online</div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-red-500"></span> Offline</div>
+          <div class="flex items-center gap-2"><span class="w-3 h-0.5 bg-indigo-500 rounded"></span> P2P Link</div>
+          <div class="flex items-center gap-2"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> TX Flow</div>
+        </div>
+
+        <!-- Throughput Sparkline -->
+        <div class="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur rounded-lg border border-slate-800/60 px-3 py-2">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Block Throughput (last 20)</p>
+          <div class="flex items-end gap-[2px] h-10" id="sparkline"></div>
+        </div>
+      </div>
+
+      <!-- Node Comparison Bar -->
+      <div class="border-t border-slate-800/40 p-3">
+        <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Chain Comparison</p>
+        <div class="grid grid-cols-3 gap-3" id="chain-compare"></div>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT PANEL: Feeds & Controls ============ -->
+    <div class="w-full lg:w-[400px] border-l border-slate-800/40 flex flex-col">
+
+      <!-- Tabs -->
+      <div class="flex border-b border-slate-800/40">
+        <button class="tab-btn flex-1 py-2.5 text-xs font-semibold uppercase tracking-wider text-indigo-400 border-b-2 border-indigo-500" data-tab="transactions">Transactions</button>
+        <button class="tab-btn flex-1 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500 border-b-2 border-transparent hover:text-slate-300" data-tab="blocks">Blocks</button>
+        <button class="tab-btn flex-1 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500 border-b-2 border-transparent hover:text-slate-300" data-tab="events">Event Log</button>
+      </div>
+
+      <!-- Transaction Feed -->
+      <div id="tab-transactions" class="flex-1 overflow-y-auto feed p-3 space-y-2">
+        <p class="text-xs text-slate-600 text-center py-8">Waiting for transactions...</p>
+      </div>
+
+      <!-- Block Feed -->
+      <div id="tab-blocks" class="flex-1 overflow-y-auto feed p-3 space-y-2 hidden">
+        <p class="text-xs text-slate-600 text-center py-8">Waiting for blocks...</p>
+      </div>
+
+      <!-- Event Log -->
+      <div id="tab-events" class="flex-1 overflow-y-auto feed p-3 space-y-1 hidden">
+        <p class="text-xs text-slate-600 text-center py-8">No events yet...</p>
+      </div>
+
+      <!-- Node Detail Cards -->
+      <div class="border-t border-slate-800/40 p-3" id="node-details">
+        <div class="flex items-center justify-between mb-2">
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Node Details</p>
+          <p class="text-[10px] text-slate-600 mono" id="last-poll">--</p>
+        </div>
+        <div id="node-cards" class="space-y-2"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ MINE MODAL ============ -->
+  <div id="mine-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[360px] p-5 shadow-2xl">
+      <h3 class="text-sm font-bold mb-4">Mine a Block</h3>
+      <p class="text-xs text-slate-400 mb-3">Select which node should mine the next block:</p>
+      <div class="space-y-2 mb-4">
+        <button onclick="mineOn(0)" class="w-full btn btn-success">Node 1 (port 5001)</button>
+        <button onclick="mineOn(1)" class="w-full btn btn-success">Node 2 (port 5002)</button>
+        <button onclick="mineOn(2)" class="w-full btn btn-success">Node 3 (port 5003)</button>
+        <button onclick="mineOnAll()" class="w-full btn btn-primary">Mine on ALL nodes</button>
+      </div>
+      <div id="mine-result" class="text-xs mono text-slate-400 min-h-[20px] mb-3"></div>
+      <button onclick="closeModal('mine-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ BALANCE MODAL ============ -->
+  <div id="balance-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[420px] p-5 shadow-2xl">
+      <h3 class="text-sm font-bold mb-4">Check Balance</h3>
+      <div class="mb-3">
+        <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Address</label>
+        <input id="balance-addr" type="text" placeholder="Enter wallet address or node ID..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-200 focus:outline-none focus:border-indigo-500" />
+      </div>
+      <div class="flex gap-2 mb-3">
+        <select id="balance-node" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none">
+          <option value="0">Query Node 1</option>
+          <option value="1">Query Node 2</option>
+          <option value="2">Query Node 3</option>
+        </select>
+        <button onclick="checkBalance()" class="btn btn-warning">Lookup</button>
+      </div>
+      <div id="balance-result" class="text-xs min-h-[20px] mb-3"></div>
+      <p class="text-[10px] text-slate-600 mb-2">Quick lookup — known miner addresses:</p>
+      <div id="known-addresses" class="space-y-1 max-h-[120px] overflow-y-auto feed mb-3"></div>
+      <button onclick="closeModal('balance-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ BLOCK DETAIL MODAL ============ -->
+  <div id="block-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[500px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold">Block Details</h3>
+        <button onclick="closeModal('block-modal')" class="text-slate-500 hover:text-slate-300 text-lg">&times;</button>
+      </div>
+      <div id="block-detail-content"></div>
+    </div>
+  </div>
+
+  <script>
+    // =====================================================================
+    // CONFIG
+    // =====================================================================
+    const NODES = [
+      { id: "node-1", name: "Node 1", color: "#6366f1", api: "/api/node1" },
+      { id: "node-2", name: "Node 2", color: "#8b5cf6", api: "/api/node2" },
+      { id: "node-3", name: "Node 3", color: "#a78bfa", api: "/api/node3" },
+    ];
+    const POLL_MS = 3000;
+
+    // =====================================================================
+    // STATE
+    // =====================================================================
+    let nodesState = {};
+    let prevChains = {};
+    let particleQueue = [];
+    let blockTimestamps = [];      // timestamps of recently observed blocks
+    let txCountHistory = [];       // { time, count } for TPS calc
+    let sparklineData = [];        // tx counts per block for sparkline
+    let knownAddresses = new Set();
+    const startTime = Date.now();
+    let pollCount = 0;
+
+    // =====================================================================
+    // UTILS
+    // =====================================================================
+    function truncAddr(a) { return !a ? "???" : a.length <= 14 ? a : a.slice(0,8) + ".." + a.slice(-4); }
+    function fmtTime(s) { const m = Math.floor(s/60), h = Math.floor(m/60); return h > 0 ? `${h}:${String(m%60).padStart(2,'0')}:${String(Math.floor(s)%60).padStart(2,'0')}` : `${m}:${String(Math.floor(s)%60).padStart(2,'0')}`; }
+
+    // =====================================================================
+    // CLOCK & UPTIME
+    // =====================================================================
+    setInterval(() => {
+      document.getElementById("clock").textContent = new Date().toLocaleTimeString();
+      document.getElementById("stat-uptime").textContent = fmtTime((Date.now() - startTime) / 1000);
+    }, 1000);
+
+    // =====================================================================
+    // MODAL HELPERS
+    // =====================================================================
+    function openModal(id) { document.getElementById(id).classList.remove("hidden"); }
+    function closeModal(id) { document.getElementById(id).classList.add("hidden"); }
+
+    // =====================================================================
+    // TABS
+    // =====================================================================
+    const TAB_IDS = ["transactions", "blocks", "events"];
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-btn").forEach(b => { b.classList.remove("text-indigo-400","border-indigo-500"); b.classList.add("text-slate-500","border-transparent"); });
+        btn.classList.remove("text-slate-500","border-transparent"); btn.classList.add("text-indigo-400","border-indigo-500");
+        TAB_IDS.forEach(t => document.getElementById("tab-"+t).classList.toggle("hidden", btn.dataset.tab !== t));
+      });
+    });
+
+    // =====================================================================
+    // EVENT LOG
+    // =====================================================================
+    function logEvent(msg, type = "info") {
+      const feed = document.getElementById("tab-events");
+      if (feed.querySelector("p.text-slate-600")) feed.innerHTML = "";
+      const colors = { info: "text-slate-400", success: "text-emerald-400", warn: "text-amber-400", error: "text-red-400" };
+      const el = document.createElement("div");
+      el.className = `slide-in text-[11px] mono ${colors[type] || colors.info} py-0.5`;
+      el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      feed.insertBefore(el, feed.firstChild);
+      while (feed.children.length > 200) feed.removeChild(feed.lastChild);
+    }
+
+    // =====================================================================
+    // MINE ACTION
+    // =====================================================================
+    async function mineOn(idx) {
+      const el = document.getElementById("mine-result");
+      el.innerHTML = `<span class="text-slate-500">Mining on ${NODES[idx].name}...</span>`;
+      logEvent(`Mining requested on ${NODES[idx].name}`, "info");
+      try {
+        const res = await fetch(`${NODES[idx].api}/mine`, { signal: AbortSignal.timeout(120000) });
+        const data = await res.json();
+        el.innerHTML = `<span class="text-emerald-400">Block #${data.index} mined! proof=${data.proof}, ${data.transactions.length} tx(s)</span>`;
+        logEvent(`Block #${data.index} mined on ${NODES[idx].name} (proof=${data.proof})`, "success");
+        poll();
+      } catch (e) {
+        el.innerHTML = `<span class="text-red-400">Error: ${e.message}</span>`;
+        logEvent(`Mining failed on ${NODES[idx].name}: ${e.message}`, "error");
+      }
+    }
+    async function mineOnAll() {
+      const el = document.getElementById("mine-result");
+      el.innerHTML = `<span class="text-slate-500">Mining on all nodes...</span>`;
+      const results = await Promise.allSettled(NODES.map((_, i) => mineOn(i)));
+      el.innerHTML = `<span class="text-emerald-400">Done. Mined on ${results.filter(r=>r.status==='fulfilled').length} node(s).</span>`;
+    }
+
+    // =====================================================================
+    // BALANCE LOOKUP
+    // =====================================================================
+    async function checkBalance() {
+      const addr = document.getElementById("balance-addr").value.trim();
+      if (!addr) return;
+      const nodeIdx = parseInt(document.getElementById("balance-node").value);
+      const el = document.getElementById("balance-result");
+      el.innerHTML = `<span class="text-slate-500">Querying...</span>`;
+      try {
+        const res = await fetch(`${NODES[nodeIdx].api}/balance/${addr}`, { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        el.innerHTML = `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+          <p class="text-[10px] text-slate-500 mb-1">Balance on ${NODES[nodeIdx].name}</p>
+          <p class="text-2xl font-bold mono text-emerald-400">${data.balance} <span class="text-sm text-slate-500">ATL</span></p>
+          <p class="text-[10px] mono text-slate-600 mt-1 break-all">${data.address}</p>
+        </div>`;
+        logEvent(`Balance lookup: ${truncAddr(addr)} = ${data.balance} ATL`, "info");
+      } catch (e) {
+        el.innerHTML = `<span class="text-red-400">Error: ${e.message}</span>`;
+      }
+    }
+    function quickLookup(addr) {
+      document.getElementById("balance-addr").value = addr;
+      checkBalance();
+    }
+    function renderKnownAddresses() {
+      const container = document.getElementById("known-addresses");
+      if (knownAddresses.size === 0) { container.innerHTML = '<p class="text-[10px] text-slate-600">None yet — mine some blocks first</p>'; return; }
+      container.innerHTML = [...knownAddresses].map(a => `
+        <button onclick="quickLookup('${a}')" class="w-full text-left bg-slate-800/60 hover:bg-slate-800 rounded px-2 py-1 text-[10px] mono text-slate-400 truncate transition">${a}</button>
+      `).join("");
+    }
+
+    // =====================================================================
+    // CONSENSUS
+    // =====================================================================
+    async function triggerConsensus() {
+      const btn = document.getElementById("consensus-btn");
+      btn.textContent = "Syncing...";
+      btn.disabled = true;
+      logEvent("Consensus resolution triggered on all nodes", "warn");
+      try {
+        const results = await Promise.all(NODES.map(n => fetch(`${n.api}/nodes/resolve`, { signal: AbortSignal.timeout(10000) }).then(r=>r.json()).catch(()=>null)));
+        results.forEach((r, i) => {
+          if (r) logEvent(`${NODES[i].name}: ${r.message}`, r.message.includes("replaced") ? "warn" : "success");
+        });
+        await poll();
+      } catch (e) { logEvent(`Consensus error: ${e.message}`, "error"); }
+      btn.textContent = "Sync Consensus";
+      btn.disabled = false;
+    }
+
+    // =====================================================================
+    // BLOCK DETAIL MODAL
+    // =====================================================================
+    function showBlockDetail(block, nodeName) {
+      const c = document.getElementById("block-detail-content");
+      c.innerHTML = `
+        <div class="space-y-3">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-800">
+              <p class="text-[10px] text-slate-500 uppercase">Index</p>
+              <p class="text-lg font-bold mono text-indigo-400">#${block.index}</p>
+            </div>
+            <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-800">
+              <p class="text-[10px] text-slate-500 uppercase">Proof of Work</p>
+              <p class="text-lg font-bold mono text-cyan-400">${block.proof}</p>
+            </div>
+          </div>
+          <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-800">
+            <p class="text-[10px] text-slate-500 uppercase mb-1">Timestamp</p>
+            <p class="text-xs mono text-slate-300">${new Date(block.timestamp * 1000).toLocaleString()}</p>
+          </div>
+          <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-800">
+            <p class="text-[10px] text-slate-500 uppercase mb-1">Previous Hash</p>
+            <p class="text-xs mono text-slate-300 break-all">${block.previous_hash}</p>
+          </div>
+          <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-800">
+            <p class="text-[10px] text-slate-500 uppercase mb-1">Source</p>
+            <p class="text-xs text-slate-300">${nodeName}</p>
+          </div>
+          <div>
+            <p class="text-[10px] text-slate-500 uppercase mb-2">Transactions (${block.transactions.length})</p>
+            ${block.transactions.length === 0 ? '<p class="text-xs text-slate-600">No transactions</p>' :
+              block.transactions.map(tx => `
+                <div class="bg-slate-800/40 rounded-lg p-2.5 border border-slate-800 mb-2">
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-[10px] uppercase ${tx.sender==='MINING_REWARD' ? 'text-emerald-500' : 'text-amber-500'} font-semibold">${tx.sender==='MINING_REWARD' ? 'Coinbase' : 'Transfer'}</span>
+                    <span class="text-sm font-bold mono ${tx.sender==='MINING_REWARD' ? 'text-emerald-400' : 'text-amber-400'}">+${tx.amount} ATL</span>
+                  </div>
+                  <p class="text-[10px] mono text-slate-500">From: ${tx.sender==='MINING_REWARD' ? 'COINBASE' : tx.sender}</p>
+                  <p class="text-[10px] mono text-slate-400">To: ${tx.recipient}</p>
+                  ${tx.signature ? `<p class="text-[10px] mono text-slate-600 truncate mt-1">Sig: ${tx.signature.slice(0,32)}...</p>` : ''}
+                </div>
+              `).join("")
+            }
+          </div>
+        </div>`;
+      openModal("block-modal");
+    }
+
+    // =====================================================================
+    // NETWORK GRAPH
+    // =====================================================================
+    function getPositions() {
+      const svg = document.getElementById("network-canvas");
+      const w = svg.clientWidth || 800, h = svg.clientHeight || 500;
+      const cx = w/2, cy = h/2, r = Math.min(w,h) * 0.26;
+      return NODES.map((n,i) => {
+        const a = -Math.PI/2 + (i*2*Math.PI)/3;
+        return { ...n, x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) };
+      });
+    }
+
+    function drawNetwork() {
+      const pos = getPositions();
+      const links = document.getElementById("links-layer");
+      const nodes = document.getElementById("nodes-layer");
+      links.innerHTML = ""; nodes.innerHTML = "";
+
+      // Links
+      for (let i = 0; i < pos.length; i++) for (let j = i+1; j < pos.length; j++) {
+        const a = pos[i], b = pos[j];
+        const bothOnline = (nodesState[a.id]?.online) && (nodesState[b.id]?.online);
+        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        line.setAttribute("x1",a.x); line.setAttribute("y1",a.y);
+        line.setAttribute("x2",b.x); line.setAttribute("y2",b.y);
+        line.setAttribute("stroke", bothOnline ? "#6366f1" : "#ef4444");
+        line.setAttribute("stroke-opacity", bothOnline ? "0.25" : "0.1");
+        line.setAttribute("stroke-width", bothOnline ? "2" : "1");
+        line.setAttribute("stroke-dasharray", "6,4");
+        links.appendChild(line);
+
+        // Data flow label on link
+        if (bothOnline) {
+          const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+          const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+          txt.setAttribute("x", mx); txt.setAttribute("y", my - 6);
+          txt.setAttribute("text-anchor", "middle");
+          txt.setAttribute("fill", "#475569"); txt.setAttribute("font-size", "8");
+          txt.setAttribute("font-family", "'JetBrains Mono', monospace");
+          txt.textContent = "P2P";
+          links.appendChild(txt);
+        }
+      }
+
+      // Nodes
+      pos.forEach(n => {
+        const s = nodesState[n.id] || {};
+        const online = s.online ?? false;
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.setAttribute("transform", `translate(${n.x},${n.y})`);
+        g.style.cursor = "pointer";
+        g.addEventListener("click", () => {
+          if (s.chain?.length) showBlockDetail(s.chain[s.chain.length-1], n.name);
+        });
+
+        // Pulse ring
+        if (online) {
+          const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          ring.setAttribute("r","36"); ring.setAttribute("fill","none");
+          ring.setAttribute("stroke", n.color); ring.setAttribute("stroke-width","1.5"); ring.setAttribute("opacity","0.3");
+          ring.classList.add("ping-ring"); g.appendChild(ring);
+        }
+
+        // Outer ring
+        const outer = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        outer.setAttribute("r","32"); outer.setAttribute("fill", online ? "#0f172a" : "#1e1b2e");
+        outer.setAttribute("stroke", online ? n.color : "#ef4444");
+        outer.setAttribute("stroke-width", online ? "3" : "2");
+        outer.setAttribute("filter","url(#glow)"); g.appendChild(outer);
+
+        // Status dot
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.setAttribute("r","4"); dot.setAttribute("cy","-16");
+        dot.setAttribute("fill", online ? "#22c55e" : "#ef4444"); g.appendChild(dot);
+
+        // Name
+        const name = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        name.setAttribute("text-anchor","middle"); name.setAttribute("dy","-2");
+        name.setAttribute("fill","#e2e8f0"); name.setAttribute("font-size","11"); name.setAttribute("font-weight","600");
+        name.setAttribute("font-family","'JetBrains Mono', monospace");
+        name.textContent = n.name; g.appendChild(name);
+
+        // Chain length
+        const sub = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        sub.setAttribute("text-anchor","middle"); sub.setAttribute("dy","12");
+        sub.setAttribute("fill","#64748b"); sub.setAttribute("font-size","9");
+        sub.setAttribute("font-family","'JetBrains Mono', monospace");
+        sub.textContent = `${s.chainLength ?? 0} blk`; g.appendChild(sub);
+
+        // Tokens below node
+        const tokensOnNode = (s.chain || []).reduce((sum,b) => sum + b.transactions.filter(t=>t.sender==="MINING_REWARD").reduce((s2,t)=>s2+t.amount,0), 0);
+        const tkn = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        tkn.setAttribute("text-anchor","middle"); tkn.setAttribute("dy","50");
+        tkn.setAttribute("fill","#22c55e"); tkn.setAttribute("font-size","10"); tkn.setAttribute("font-weight","600");
+        tkn.setAttribute("font-family","'JetBrains Mono', monospace");
+        tkn.textContent = `${tokensOnNode.toFixed(1)} ATL`; g.appendChild(tkn);
+
+        nodes.appendChild(g);
+      });
+    }
+
+    // =====================================================================
+    // PARTICLES
+    // =====================================================================
+    function spawnParticle(fromId, toId) {
+      const pos = getPositions();
+      const from = pos.find(p=>p.id===fromId), to = pos.find(p=>p.id===toId);
+      if (!from || !to) return;
+      const layer = document.getElementById("particles-layer");
+      const p = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      p.setAttribute("r","5"); p.setAttribute("fill","#fbbf24"); p.setAttribute("filter","url(#glow-strong)");
+      const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      trail.setAttribute("r","8"); trail.setAttribute("fill","#fbbf24"); trail.setAttribute("opacity","0.15");
+      layer.appendChild(trail); layer.appendChild(p);
+      const dur = 1200, t0 = performance.now();
+      (function anim(now) {
+        const t = Math.min((now-t0)/dur, 1);
+        const e = t<0.5 ? 2*t*t : -1+(4-2*t)*t;
+        const x = from.x+(to.x-from.x)*e, y = from.y+(to.y-from.y)*e;
+        p.setAttribute("cx",x); p.setAttribute("cy",y);
+        trail.setAttribute("cx",x); trail.setAttribute("cy",y);
+        const op = t<0.1 ? t*10 : t>0.9 ? (1-t)*10 : 1;
+        p.setAttribute("opacity", op); trail.setAttribute("opacity", op*0.15);
+        if (t < 1) requestAnimationFrame(anim);
+        else { layer.removeChild(p); layer.removeChild(trail); }
+      })(performance.now());
+    }
+    function drainParticles() {
+      if (!particleQueue.length) return;
+      const batch = particleQueue.splice(0, 4);
+      batch.forEach((p,i) => setTimeout(() => spawnParticle(p.from, p.to), i * 250));
+    }
+
+    // =====================================================================
+    // FEEDS
+    // =====================================================================
+    function addTx(tx, nodeName, blockIdx) {
+      const feed = document.getElementById("tab-transactions");
+      if (feed.querySelector("p.text-slate-600")) feed.innerHTML = "";
+      const coin = tx.sender === "MINING_REWARD";
+      const el = document.createElement("div");
+      el.className = "slide-in bg-slate-900/50 border border-slate-800/40 rounded-lg px-3 py-2 cursor-pointer hover:bg-slate-800/40 transition";
+      el.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[10px] uppercase tracking-wider ${coin?'text-emerald-500':'text-amber-500'} font-semibold">${coin?'Mining Reward':'Transfer'}</span>
+          <span class="text-[10px] text-slate-600">Block #${blockIdx} &middot; ${nodeName}</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span class="mono text-slate-400">${coin ? 'COINBASE' : truncAddr(tx.sender)}</span>
+          <svg class="w-3.5 h-3.5 text-slate-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+          <span class="mono text-slate-300">${truncAddr(tx.recipient)}</span>
+          <span class="ml-auto font-semibold mono ${coin?'text-emerald-400':'text-amber-400'}">+${tx.amount} ATL</span>
+        </div>`;
+      feed.insertBefore(el, feed.firstChild);
+      while (feed.children.length > 80) feed.removeChild(feed.lastChild);
+      // Track addresses
+      if (tx.recipient) knownAddresses.add(tx.recipient);
+      if (tx.sender && tx.sender !== "MINING_REWARD") knownAddresses.add(tx.sender);
+    }
+
+    function addBlock(block, nodeName, nodeIdx) {
+      const feed = document.getElementById("tab-blocks");
+      if (feed.querySelector("p.text-slate-600")) feed.innerHTML = "";
+      const el = document.createElement("div");
+      el.className = "slide-in bg-slate-900/50 border border-slate-800/40 rounded-lg px-3 py-2 cursor-pointer hover:bg-slate-800/40 transition";
+      el.onclick = () => showBlockDetail(block, nodeName);
+      el.innerHTML = `
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-sm font-bold mono text-indigo-400">#${block.index}</span>
+          <span class="text-[10px] text-slate-600">${nodeName} &middot; ${new Date(block.timestamp*1000).toLocaleTimeString()}</span>
+        </div>
+        <div class="flex items-center gap-4 text-[10px] text-slate-400">
+          <span>Proof: <span class="mono text-slate-300">${block.proof}</span></span>
+          <span>TXs: <span class="mono text-slate-300">${block.transactions.length}</span></span>
+          <span class="truncate flex-1">Hash: <span class="mono text-slate-300">${block.previous_hash.slice(0,16)}...</span></span>
+        </div>`;
+      feed.insertBefore(el, feed.firstChild);
+      while (feed.children.length > 80) feed.removeChild(feed.lastChild);
+    }
+
+    // =====================================================================
+    // SPARKLINE
+    // =====================================================================
+    function renderSparkline() {
+      const el = document.getElementById("sparkline");
+      const data = sparklineData.slice(-20);
+      if (data.length === 0) { el.innerHTML = '<span class="text-[10px] text-slate-600">No data</span>'; return; }
+      const max = Math.max(...data, 1);
+      el.innerHTML = data.map(v => {
+        const h = Math.max(2, (v / max) * 36);
+        const color = v > 0 ? 'bg-indigo-500' : 'bg-slate-700';
+        return `<div class="sparkline-bar w-[6px] ${color} rounded-sm" style="height:${h}px" title="${v} txs"></div>`;
+      }).join("");
+    }
+
+    // =====================================================================
+    // CHAIN COMPARISON
+    // =====================================================================
+    function renderChainCompare() {
+      const container = document.getElementById("chain-compare");
+      const maxLen = Math.max(...NODES.map(n => nodesState[n.id]?.chainLength || 0), 1);
+      container.innerHTML = NODES.map(n => {
+        const s = nodesState[n.id] || {};
+        const len = s.chainLength || 0;
+        const pct = (len / maxLen) * 100;
+        const online = s.online ?? false;
+        return `
+          <div class="bg-slate-900/50 rounded-lg p-2 border border-slate-800/40">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[10px] font-medium">${n.name}</span>
+              <span class="text-[10px] mono ${online ? 'text-green-400':'text-red-400'}">${len} blk</span>
+            </div>
+            <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+              <div class="h-full rounded-full transition-all duration-500" style="width:${pct}%; background:${n.color}"></div>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    // =====================================================================
+    // NODE CARDS
+    // =====================================================================
+    function renderNodeCards() {
+      const container = document.getElementById("node-cards");
+      container.innerHTML = NODES.map(n => {
+        const s = nodesState[n.id] || {};
+        const online = s.online ?? false;
+        const txCount = (s.chain || []).reduce((sum,b) => sum + b.transactions.length, 0);
+        return `
+          <div class="flex items-center gap-2 bg-slate-900/40 rounded-lg px-2.5 py-1.5 border border-slate-800/30 ${online ? '' : 'opacity-50'}">
+            <span class="w-2 h-2 rounded-full ${online?'bg-green-500':'bg-red-500'} shrink-0"></span>
+            <span class="text-xs font-medium flex-1">${n.name}</span>
+            <span class="text-[10px] mono text-slate-500">${s.chainLength??0} blk</span>
+            <span class="text-[10px] mono text-slate-500">${txCount} tx</span>
+            <span class="text-[10px] mono font-semibold ${online?'text-green-400':'text-red-400'}">${online?'UP':'DOWN'}</span>
+          </div>`;
+      }).join("");
+    }
+
+    // =====================================================================
+    // POLLING
+    // =====================================================================
+    async function fetchNode(node) {
+      try {
+        const [hRes, cRes] = await Promise.all([
+          fetch(`${node.api}/health`, { signal: AbortSignal.timeout(3000) }),
+          fetch(`${node.api}/chain`, { signal: AbortSignal.timeout(3000) }),
+        ]);
+        if (!hRes.ok || !cRes.ok) throw 0;
+        const h = await hRes.json(), c = await cRes.json();
+        return { online: true, chainLength: h.chain_length, nodeId: h.node_id, chain: c.chain };
+      } catch { return { online: false, chainLength: 0, nodeId: null, chain: [] }; }
+    }
+
+    async function poll() {
+      pollCount++;
+      const results = await Promise.all(NODES.map(n => fetchNode(n)));
+      let totalBlocks = 0, totalTxs = 0, totalTokens = 0, onlineCount = 0;
+      const chainLengths = [];
+
+      results.forEach((res, i) => {
+        const nid = NODES[i].id;
+        nodesState[nid] = res;
+        if (res.online) onlineCount++;
+        chainLengths.push(res.chainLength);
+        totalBlocks = Math.max(totalBlocks, res.chainLength);
+
+        // Detect new blocks
+        const prev = prevChains[nid]?.length ?? 0;
+        if (res.chain.length > prev) {
+          const fresh = res.chain.slice(prev);
+          fresh.forEach(block => {
+            addBlock(block, NODES[i].name, i);
+            logEvent(`New block #${block.index} on ${NODES[i].name} (proof=${block.proof}, ${block.transactions.length} txs)`, "success");
+            blockTimestamps.push(block.timestamp);
+            sparklineData.push(block.transactions.length);
+            block.transactions.forEach(tx => {
+              addTx(tx, NODES[i].name, block.index);
+              const others = NODES.filter((_,j) => j !== i);
+              const target = others[Math.floor(Math.random() * others.length)];
+              particleQueue.push({ from: nid, to: target.id });
+            });
+          });
+        }
+        prevChains[nid] = res.chain;
+
+        // Totals
+        res.chain.forEach(b => b.transactions.forEach(tx => {
+          totalTxs++;
+          if (tx.sender === "MINING_REWARD") totalTokens += tx.amount;
+        }));
+      });
+
+      // Stats
+      document.getElementById("stat-nodes").textContent = `${onlineCount}/3`;
+      document.getElementById("stat-blocks").textContent = totalBlocks;
+      document.getElementById("stat-txs").textContent = totalTxs;
+      document.getElementById("stat-tokens").textContent = totalTokens.toFixed(1);
+
+      // Avg block time
+      const ts = blockTimestamps.slice(-20).sort();
+      if (ts.length >= 2) {
+        const diffs = []; for (let i=1;i<ts.length;i++) diffs.push(ts[i]-ts[i-1]);
+        const avg = diffs.reduce((a,b)=>a+b,0) / diffs.length;
+        document.getElementById("stat-blocktime").textContent = avg > 0 ? `${avg.toFixed(1)}s` : "--";
+      }
+
+      // TPS
+      txCountHistory.push({ time: Date.now(), count: totalTxs });
+      if (txCountHistory.length > 1) {
+        const recent = txCountHistory.slice(-10);
+        const dt = (recent[recent.length-1].time - recent[0].time) / 1000;
+        const dc = recent[recent.length-1].count - recent[0].count;
+        document.getElementById("stat-tps").textContent = dt > 0 ? (dc/dt).toFixed(2) : "0.0";
+      }
+      while (txCountHistory.length > 60) txCountHistory.shift();
+
+      // Chain sync
+      const synced = chainLengths.filter(l => l > 0).every(l => l === chainLengths.find(x => x > 0));
+      const syncEl = document.getElementById("stat-sync");
+      syncEl.textContent = onlineCount === 0 ? "--" : synced ? "SYNCED" : "DIVERGED";
+      syncEl.className = `text-lg font-bold mono ${synced ? 'text-green-400' : 'text-amber-400'}`;
+
+      // Connection status
+      const connDot = document.getElementById("conn-dot");
+      const connText = document.getElementById("connection-status");
+      connDot.className = `w-2 h-2 rounded-full ${onlineCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`;
+      connText.textContent = onlineCount > 0 ? `Connected (poll #${pollCount})` : "Disconnected";
+      document.getElementById("last-poll").textContent = `Last: ${new Date().toLocaleTimeString()}`;
+
+      drawNetwork();
+      renderNodeCards();
+      renderChainCompare();
+      renderSparkline();
+      renderKnownAddresses();
+      drainParticles();
+    }
+
+    // =====================================================================
+    // INIT
+    // =====================================================================
+    drawNetwork();
+    poll();
+    setInterval(poll, POLL_MS);
+    window.addEventListener("resize", drawNetwork);
+    logEvent("Atlas Network Monitor initialized", "info");
+  </script>
+</body>
+</html>
