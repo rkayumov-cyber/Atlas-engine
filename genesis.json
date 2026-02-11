@@ -11,5 +11,12 @@
   "parameters": {
     "block_reward": 50.0,
     "difficulty_zeros": 4
+  },
+  "block": {
+    "index": 0,
+    "timestamp": 1700000000,
+    "transactions": [],
+    "proof": 100,
+    "previous_hash": "0"
   }
 }

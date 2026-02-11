@@ -22,9 +22,9 @@
     .btn { @apply px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 border; }
     .btn:active { transform: scale(0.97); }
     .btn-primary { @apply bg-indigo-600 border-indigo-500 hover:bg-indigo-500 text-white; }
-    .btn-success { @apply bg-emerald-600/20 border-emerald-500/40 hover:bg-emerald-600/30 text-emerald-400; }
-    .btn-warning { @apply bg-amber-600/20 border-amber-500/40 hover:bg-amber-600/30 text-amber-400; }
-    .btn-danger { @apply bg-red-600/20 border-red-500/40 hover:bg-red-600/30 text-red-400; }
+    .btn-success { @apply bg-emerald-600/20 border-emerald-500/40 hover:bg-emerald-600/60 text-emerald-400; }
+    .btn-warning { @apply bg-amber-600/20 border-amber-500/40 hover:bg-amber-600/60 text-amber-400; }
+    .btn-danger { @apply bg-red-600/20 border-red-500/40 hover:bg-red-600/60 text-red-400; }
     .modal-backdrop { background: rgba(2,6,23,0.8); backdrop-filter: blur(4px); }
     .sparkline-bar { transition: height 0.3s ease; }
   </style>
@@ -61,7 +61,7 @@
       <div class="grid grid-cols-4 xl:grid-cols-8 gap-2 p-3 border-b border-slate-800/40">
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
           <p class="text-[10px] uppercase tracking-wider text-slate-500">Nodes</p>
-          <p class="text-lg font-bold mono text-green-400" id="stat-nodes">0/3</p>
+          <p class="text-lg font-bold mono text-green-400" id="stat-nodes">0/6</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
           <p class="text-[10px] uppercase tracking-wider text-slate-500">Max Chain</p>
@@ -123,7 +123,7 @@
       <!-- Node Comparison Bar -->
       <div class="border-t border-slate-800/40 p-3">
         <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Chain Comparison</p>
-        <div class="grid grid-cols-3 gap-3" id="chain-compare"></div>
+        <div class="grid grid-cols-3 lg:grid-cols-6 gap-3" id="chain-compare"></div>
       </div>
     </div>
 
@@ -168,11 +168,14 @@
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[360px] p-5 shadow-2xl">
       <h3 class="text-sm font-bold mb-4">Mine a Block</h3>
       <p class="text-xs text-slate-400 mb-3">Select which node should mine the next block:</p>
-      <div class="space-y-2 mb-4">
-        <button onclick="mineOn(0)" class="w-full btn btn-success">Node 1 (port 5001)</button>
-        <button onclick="mineOn(1)" class="w-full btn btn-success">Node 2 (port 5002)</button>
-        <button onclick="mineOn(2)" class="w-full btn btn-success">Node 3 (port 5003)</button>
-        <button onclick="mineOnAll()" class="w-full btn btn-primary">Mine on ALL nodes</button>
+      <div class="grid grid-cols-2 gap-2 mb-4">
+        <button onclick="mineOn(0)" class="btn btn-success">Node 1 (:5001)</button>
+        <button onclick="mineOn(1)" class="btn btn-success">Node 2 (:5002)</button>
+        <button onclick="mineOn(2)" class="btn btn-success">Node 3 (:5003)</button>
+        <button onclick="mineOn(3)" class="btn btn-success">Node 4 (:5004)</button>
+        <button onclick="mineOn(4)" class="btn btn-success">Node 5 (:5005)</button>
+        <button onclick="mineOn(5)" class="btn btn-success">Node 6 (:5006)</button>
+        <button onclick="mineOnAll()" class="col-span-2 btn btn-primary">Mine on ALL nodes</button>
       </div>
       <div id="mine-result" class="text-xs mono text-slate-400 min-h-[20px] mb-3"></div>
       <button onclick="closeModal('mine-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
@@ -192,6 +195,9 @@
           <option value="0">Query Node 1</option>
           <option value="1">Query Node 2</option>
           <option value="2">Query Node 3</option>
+          <option value="3">Query Node 4</option>
+          <option value="4">Query Node 5</option>
+          <option value="5">Query Node 6</option>
         </select>
         <button onclick="checkBalance()" class="btn btn-warning">Lookup</button>
       </div>
@@ -221,6 +227,9 @@
       { id: "node-1", name: "Node 1", color: "#6366f1", api: "/api/node1" },
       { id: "node-2", name: "Node 2", color: "#8b5cf6", api: "/api/node2" },
       { id: "node-3", name: "Node 3", color: "#a78bfa", api: "/api/node3" },
+      { id: "node-4", name: "Node 4", color: "#c084fc", api: "/api/node4" },
+      { id: "node-5", name: "Node 5", color: "#818cf8", api: "/api/node5" },
+      { id: "node-6", name: "Node 6", color: "#67e8f9", api: "/api/node6" },
     ];
     const POLL_MS = 3000;
 
@@ -416,9 +425,9 @@
     function getPositions() {
       const svg = document.getElementById("network-canvas");
       const w = svg.clientWidth || 800, h = svg.clientHeight || 500;
-      const cx = w/2, cy = h/2, r = Math.min(w,h) * 0.26;
+      const cx = w/2, cy = h/2, r = Math.min(w,h) * 0.30;
       return NODES.map((n,i) => {
-        const a = -Math.PI/2 + (i*2*Math.PI)/3;
+        const a = -Math.PI/2 + (i * 2 * Math.PI) / NODES.length;
         return { ...n, x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) };
       });
     }
@@ -640,7 +649,7 @@
         const online = s.online ?? false;
         const txCount = (s.chain || []).reduce((sum,b) => sum + b.transactions.length, 0);
         return `
-          <div class="flex items-center gap-2 bg-slate-900/40 rounded-lg px-2.5 py-1.5 border border-slate-800/30 ${online ? '' : 'opacity-50'}">
+          <div class="flex items-center gap-2 bg-slate-900/40 rounded-lg px-2.5 py-1.5 border border-slate-800/60 ${online ? '' : 'opacity-50'}">
             <span class="w-2 h-2 rounded-full ${online?'bg-green-500':'bg-red-500'} shrink-0"></span>
             <span class="text-xs font-medium flex-1">${n.name}</span>
             <span class="text-[10px] mono text-slate-500">${s.chainLength??0} blk</span>
@@ -705,7 +714,7 @@
       });
 
       // Stats
-      document.getElementById("stat-nodes").textContent = `${onlineCount}/3`;
+      document.getElementById("stat-nodes").textContent = `${onlineCount}/${NODES.length}`;
       document.getElementById("stat-blocks").textContent = totalBlocks;
       document.getElementById("stat-txs").textContent = totalTxs;
       document.getElementById("stat-tokens").textContent = totalTokens.toFixed(1);

@@ -17,7 +17,7 @@ import time
 import requests
 
 # Inside Docker, nodes are reachable by service name on port 5000.
-# Outside Docker, they're on localhost:5001-5003.
+# Outside Docker, they're on localhost:5001-5006.
 _env_nodes = os.environ.get("ATLAS_NODES", "")
 DEFAULT_NODES = (
     [n.strip() for n in _env_nodes.split(",") if n.strip()]
@@ -26,6 +26,9 @@ DEFAULT_NODES = (
         "http://localhost:5001",
         "http://localhost:5002",
         "http://localhost:5003",
+        "http://localhost:5004",
+        "http://localhost:5005",
+        "http://localhost:5006",
     ]
 )
 

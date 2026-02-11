@@ -186,20 +186,30 @@ class Blockchain:
     # -- genesis ------------------------------------------------------------
 
     def _load_genesis(self) -> None:
+        default_block = {
+            "index": 0,
+            "timestamp": 0,
+            "transactions": [],
+            "proof": 100,
+            "previous_hash": "0",
+        }
         genesis_path = os.path.join(os.path.dirname(__file__), "genesis.json")
         if os.path.exists(genesis_path):
             with open(genesis_path, "r") as f:
-                genesis = json.load(f)
-            log.info("Genesis block loaded from genesis.json")
+                data = json.load(f)
+            # Support both flat block format and nested { "block": {...} } format
+            genesis = data.get("block", data) if isinstance(data, dict) else default_block
+            # Apply parameters from genesis config if present
+            params = data.get("parameters", {})
+            if "difficulty_zeros" in params:
+                Blockchain.DIFFICULTY = int(params["difficulty_zeros"])
+            log.info("Genesis block loaded from genesis.json (difficulty=%d)", Blockchain.DIFFICULTY)
         else:
-            genesis = {
-                "index": 0,
-                "timestamp": 0,
-                "transactions": [],
-                "proof": 100,
-                "previous_hash": "0",
-            }
+            genesis = default_block
             log.info("Using hardcoded default genesis block")
+        # Ensure required fields exist
+        for key, val in default_block.items():
+            genesis.setdefault(key, val)
         self.chain.append(genesis)
         self.state.apply_block(genesis)
 

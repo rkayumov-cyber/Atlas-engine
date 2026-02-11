@@ -32,16 +32,52 @@ services:
     volumes:
       - node3-data:/data
 
+  node-4:
+    build: .
+    container_name: atlas-node-4
+    environment:
+      - ATLAS_PORT=5000
+      - ATLAS_DB=/data/state.db
+    ports:
+      - "5004:5000"
+    volumes:
+      - node4-data:/data
+
+  node-5:
+    build: .
+    container_name: atlas-node-5
+    environment:
+      - ATLAS_PORT=5000
+      - ATLAS_DB=/data/state.db
+    ports:
+      - "5005:5000"
+    volumes:
+      - node5-data:/data
+
+  node-6:
+    build: .
+    container_name: atlas-node-6
+    environment:
+      - ATLAS_PORT=5000
+      - ATLAS_DB=/data/state.db
+    ports:
+      - "5006:5000"
+    volumes:
+      - node6-data:/data
+
   miner:
     build: .
     container_name: atlas-miner
     command: ["python", "miner.py", "--all", "--interval", "5"]
     environment:
-      - ATLAS_NODES=http://node-1:5000,http://node-2:5000,http://node-3:5000
+      - ATLAS_NODES=http://node-1:5000,http://node-2:5000,http://node-3:5000,http://node-4:5000,http://node-5:5000,http://node-6:5000
     depends_on:
       - node-1
       - node-2
       - node-3
+      - node-4
+      - node-5
+      - node-6
 
   explorer:
     image: nginx:alpine
@@ -55,6 +91,9 @@ services:
       - node-1
       - node-2
       - node-3
+      - node-4
+      - node-5
+      - node-6
 
   monitor:
     image: nginx:alpine
@@ -68,8 +107,14 @@ services:
       - node-1
       - node-2
       - node-3
+      - node-4
+      - node-5
+      - node-6
 
 volumes:
   node1-data:
   node2-data:
   node3-data:
+  node4-data:
+  node5-data:
+  node6-data:
