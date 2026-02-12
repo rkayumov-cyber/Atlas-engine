@@ -43,7 +43,15 @@
     <div class="flex items-center gap-4">
       <button onclick="openModal('mine-modal')" class="btn btn-success">Mine Block</button>
       <button onclick="openModal('balance-modal')" class="btn btn-warning">Check Balance</button>
-      <button onclick="triggerConsensus()" class="btn btn-primary" id="consensus-btn">Sync Consensus</button>
+      <button onclick="openModal('wallet-modal');refreshWalletList()" class="btn btn-primary">Wallets</button>
+      <button onclick="openModal('transfer-modal');loadTransferWallets()" class="btn btn-warning">Transfer</button>
+      <button onclick="openModal('faucet-modal')" class="btn btn-success">Faucet</button>
+      <button onclick="openModal('consensus-modal')" class="btn btn-primary">Consensus</button>
+      <button onclick="openModal('contract-modal')" class="btn btn-warning">Contracts</button>
+      <button onclick="openModal('staking-modal');loadStakes()" class="btn btn-success">Staking</button>
+      <button onclick="openModal('simulation-modal')" class="btn btn-danger">Simulations</button>
+      <a href="/explorer" class="btn btn-primary">Explorer</a>
+      <button onclick="triggerConsensus()" class="btn btn-primary" id="consensus-btn">Sync</button>
       <div class="flex items-center gap-2 text-xs text-slate-400">
         <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse" id="conn-dot"></span>
         <span id="connection-status">Connected</span>
@@ -61,7 +69,7 @@
       <div class="grid grid-cols-4 xl:grid-cols-8 gap-2 p-3 border-b border-slate-800/40">
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
           <p class="text-[10px] uppercase tracking-wider text-slate-500">Nodes</p>
-          <p class="text-lg font-bold mono text-green-400" id="stat-nodes">0/6</p>
+          <p class="text-lg font-bold mono text-green-400" id="stat-nodes">0/31</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
           <p class="text-[10px] uppercase tracking-wider text-slate-500">Max Chain</p>
@@ -84,12 +92,12 @@
           <p class="text-lg font-bold mono text-pink-400" id="stat-tps">0.0</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Chain Sync</p>
-          <p class="text-lg font-bold mono" id="stat-sync">--</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Addresses</p>
+          <p class="text-lg font-bold mono text-violet-400" id="stat-addresses">0</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Uptime</p>
-          <p class="text-lg font-bold mono text-slate-300" id="stat-uptime">0:00</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Total Supply</p>
+          <p class="text-lg font-bold mono text-yellow-400" id="stat-supply">0.0</p>
         </div>
       </div>
 
@@ -123,7 +131,7 @@
       <!-- Node Comparison Bar -->
       <div class="border-t border-slate-800/40 p-3">
         <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Chain Comparison</p>
-        <div class="grid grid-cols-3 lg:grid-cols-6 gap-3" id="chain-compare"></div>
+        <div class="grid grid-cols-4 lg:grid-cols-8 xl:grid-cols-10 gap-2" id="chain-compare"></div>
       </div>
     </div>
 
@@ -165,18 +173,10 @@
 
   <!-- ============ MINE MODAL ============ -->
   <div id="mine-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
-    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[360px] p-5 shadow-2xl">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[520px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
       <h3 class="text-sm font-bold mb-4">Mine a Block</h3>
       <p class="text-xs text-slate-400 mb-3">Select which node should mine the next block:</p>
-      <div class="grid grid-cols-2 gap-2 mb-4">
-        <button onclick="mineOn(0)" class="btn btn-success">Node 1 (:5001)</button>
-        <button onclick="mineOn(1)" class="btn btn-success">Node 2 (:5002)</button>
-        <button onclick="mineOn(2)" class="btn btn-success">Node 3 (:5003)</button>
-        <button onclick="mineOn(3)" class="btn btn-success">Node 4 (:5004)</button>
-        <button onclick="mineOn(4)" class="btn btn-success">Node 5 (:5005)</button>
-        <button onclick="mineOn(5)" class="btn btn-success">Node 6 (:5006)</button>
-        <button onclick="mineOnAll()" class="col-span-2 btn btn-primary">Mine on ALL nodes</button>
-      </div>
+      <div class="grid grid-cols-4 gap-2 mb-4" id="mine-buttons"></div>
       <div id="mine-result" class="text-xs mono text-slate-400 min-h-[20px] mb-3"></div>
       <button onclick="closeModal('mine-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
     </div>
@@ -191,14 +191,7 @@
         <input id="balance-addr" type="text" placeholder="Enter wallet address or node ID..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-200 focus:outline-none focus:border-indigo-500" />
       </div>
       <div class="flex gap-2 mb-3">
-        <select id="balance-node" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none">
-          <option value="0">Query Node 1</option>
-          <option value="1">Query Node 2</option>
-          <option value="2">Query Node 3</option>
-          <option value="3">Query Node 4</option>
-          <option value="4">Query Node 5</option>
-          <option value="5">Query Node 6</option>
-        </select>
+        <select id="balance-node" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none"></select>
         <button onclick="checkBalance()" class="btn btn-warning">Lookup</button>
       </div>
       <div id="balance-result" class="text-xs min-h-[20px] mb-3"></div>
@@ -219,18 +212,207 @@
     </div>
   </div>
 
+  <!-- ============ WALLET MANAGER MODAL ============ -->
+  <div id="wallet-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[480px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
+      <h3 class="text-sm font-bold mb-4">Wallet Manager</h3>
+      <div class="mb-4">
+        <p class="text-xs text-slate-400 mb-2">Create a new wallet:</p>
+        <div class="flex gap-2 mb-2">
+          <select id="wallet-node" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none"></select>
+          <input id="wallet-label" type="text" placeholder="Label (optional)" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none focus:border-indigo-500" />
+        </div>
+        <button onclick="createWallet()" class="btn btn-primary w-full">Create Wallet</button>
+        <div id="wallet-create-result" class="text-xs mono text-slate-400 mt-2 min-h-[20px]"></div>
+      </div>
+      <hr class="border-slate-800 mb-3" />
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-xs text-slate-400">Wallets on selected node:</p>
+        <button onclick="refreshWalletList()" class="text-[10px] text-indigo-400 hover:text-indigo-300">Refresh</button>
+      </div>
+      <div id="wallet-list" class="space-y-2">
+        <p class="text-xs text-slate-600 text-center py-4">Select a node to view wallets</p>
+      </div>
+      <button onclick="closeModal('wallet-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200 mt-4">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ TRANSFER MODAL ============ -->
+  <div id="transfer-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[420px] p-5 shadow-2xl">
+      <h3 class="text-sm font-bold mb-4">Transfer ATL</h3>
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Node</label>
+          <select id="transfer-node" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none" onchange="loadTransferWallets()"></select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">From Wallet</label>
+          <select id="transfer-from" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-300 focus:outline-none">
+            <option value="">Select a wallet...</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">To Address</label>
+          <input id="transfer-to" type="text" placeholder="Recipient address..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-300 focus:outline-none focus:border-indigo-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Amount (ATL)</label>
+          <input id="transfer-amount" type="number" min="0.01" step="0.01" placeholder="0.00" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-300 focus:outline-none focus:border-indigo-500" />
+        </div>
+      </div>
+      <button onclick="executeTransfer()" class="btn btn-warning w-full mb-3">Send Transfer</button>
+      <div id="transfer-result" class="text-xs mono text-slate-400 min-h-[20px] mb-3"></div>
+      <button onclick="closeModal('transfer-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ FAUCET MODAL ============ -->
+  <div id="faucet-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[420px] p-5 shadow-2xl">
+      <h3 class="text-sm font-bold mb-4">Token Faucet</h3>
+      <p class="text-xs text-slate-400 mb-3">Request free ATL tokens (max 100 per request):</p>
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Node</label>
+          <select id="faucet-node" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none" onchange="loadFaucetAddresses()"></select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Address</label>
+          <select id="faucet-known" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-300 focus:outline-none mb-1">
+            <option value="">-- Pick from known wallets --</option>
+          </select>
+          <input id="faucet-address" type="text" placeholder="Or enter address manually..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-300 focus:outline-none focus:border-indigo-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Amount (ATL)</label>
+          <input id="faucet-amount" type="number" min="1" max="100" value="10" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-300 focus:outline-none focus:border-indigo-500" />
+        </div>
+      </div>
+      <button onclick="requestFaucet()" class="btn btn-success w-full mb-3">Request Tokens</button>
+      <div id="faucet-result" class="text-xs mono text-slate-400 min-h-[20px] mb-3"></div>
+      <button onclick="closeModal('faucet-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ CONSENSUS MODAL ============ -->
+  <div id="consensus-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[420px] p-5 shadow-2xl">
+      <h3 class="text-sm font-bold mb-4">Consensus Engine</h3>
+      <div id="consensus-info" class="mb-4 bg-slate-800/60 rounded-lg p-3 border border-slate-800 text-xs mono text-slate-300">Loading...</div>
+      <p class="text-xs text-slate-400 mb-3">Switch consensus engine:</p>
+      <div class="grid grid-cols-3 gap-2 mb-4">
+        <button onclick="switchConsensus('pow')" class="btn btn-success">PoW</button>
+        <button onclick="switchConsensus('pos')" class="btn btn-warning">PoS</button>
+        <button onclick="switchConsensus('pbft')" class="btn btn-primary">PBFT</button>
+      </div>
+      <div id="consensus-result" class="text-xs mono text-slate-400 min-h-[20px] mb-3"></div>
+      <button onclick="closeModal('consensus-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ CONTRACT MODAL ============ -->
+  <div id="contract-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[500px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
+      <h3 class="text-sm font-bold mb-4">Smart Contracts</h3>
+      <div class="mb-4">
+        <p class="text-xs text-slate-400 mb-2">Deploy from template:</p>
+        <div class="flex gap-2 mb-2">
+          <input id="contract-owner" type="text" placeholder="Owner address..." class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-300 focus:outline-none focus:border-indigo-500" />
+          <select id="contract-template" class="bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-300 focus:outline-none">
+            <option value="token">Token</option>
+            <option value="escrow">Escrow</option>
+          </select>
+        </div>
+        <button onclick="deployContract()" class="btn btn-primary w-full">Deploy Contract</button>
+        <div id="contract-deploy-result" class="text-xs mono text-slate-400 mt-2 min-h-[20px]"></div>
+      </div>
+      <hr class="border-slate-800 mb-3" />
+      <p class="text-xs text-slate-400 mb-2">Deployed contracts:</p>
+      <div id="contract-list" class="space-y-2">
+        <p class="text-xs text-slate-600 text-center py-4">Loading...</p>
+      </div>
+      <button onclick="closeModal('contract-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200 mt-4">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ STAKING MODAL ============ -->
+  <div id="staking-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[480px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
+      <h3 class="text-sm font-bold mb-4">Staking (PoS)</h3>
+      <p class="text-xs text-slate-400 mb-3">Stake tokens to participate in Proof-of-Stake consensus:</p>
+      <div class="space-y-3 mb-4">
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Address</label>
+          <input id="stake-address" type="text" placeholder="Wallet address..." class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-200 focus:outline-none focus:border-indigo-500" />
+        </div>
+        <div>
+          <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Amount (ATL)</label>
+          <input id="stake-amount" type="number" min="1" step="1" value="100" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs mono text-slate-200 focus:outline-none focus:border-indigo-500" />
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="doStake()" class="btn btn-success">Stake</button>
+          <button onclick="doUnstake()" class="btn btn-danger">Unstake</button>
+        </div>
+      </div>
+      <div id="stake-result" class="text-xs mono text-slate-400 min-h-[20px] mb-3"></div>
+      <hr class="border-slate-800 mb-3" />
+      <p class="text-xs text-slate-400 mb-2">Current stakes:</p>
+      <div id="stake-list" class="space-y-2 mb-4">
+        <p class="text-xs text-slate-600 text-center py-4">Loading...</p>
+      </div>
+      <button onclick="closeModal('staking-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ SIMULATION MODAL ============ -->
+  <div id="simulation-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[520px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
+      <h3 class="text-sm font-bold mb-4">Attack Simulations</h3>
+      <p class="text-xs text-slate-400 mb-4">Run educational attack simulations against the network:</p>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <button onclick="runSimulation('double-spend')" class="bg-slate-800/60 hover:bg-slate-800 border border-slate-700 rounded-lg p-3 text-left transition">
+          <p class="text-xs font-semibold text-red-400 mb-1">Double Spend</p>
+          <p class="text-[10px] text-slate-500">Attempt to spend the same tokens twice</p>
+        </button>
+        <button onclick="runSimulation('51-attack')" class="bg-slate-800/60 hover:bg-slate-800 border border-slate-700 rounded-lg p-3 text-left transition">
+          <p class="text-xs font-semibold text-amber-400 mb-1">51% Attack</p>
+          <p class="text-[10px] text-slate-500">Simulate majority hashpower attack</p>
+        </button>
+        <button onclick="runSimulation('selfish-mining')" class="bg-slate-800/60 hover:bg-slate-800 border border-slate-700 rounded-lg p-3 text-left transition">
+          <p class="text-xs font-semibold text-purple-400 mb-1">Selfish Mining</p>
+          <p class="text-[10px] text-slate-500">Withhold blocks to gain advantage</p>
+        </button>
+        <button onclick="runSimulation('step-mine')" class="bg-slate-800/60 hover:bg-slate-800 border border-slate-700 rounded-lg p-3 text-left transition">
+          <p class="text-xs font-semibold text-cyan-400 mb-1">Step-through Mining</p>
+          <p class="text-[10px] text-slate-500">Watch mining happen step by step</p>
+        </button>
+      </div>
+      <div id="sim-result" class="bg-slate-800/60 rounded-lg p-3 border border-slate-800 text-xs mono text-slate-300 min-h-[80px] mb-4 whitespace-pre-wrap">
+        Select a simulation to run...
+      </div>
+      <button onclick="closeModal('simulation-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
+    </div>
+  </div>
+
   <script>
     // =====================================================================
     // CONFIG
     // =====================================================================
-    const NODES = [
-      { id: "node-1", name: "Node 1", color: "#6366f1", api: "/api/node1" },
-      { id: "node-2", name: "Node 2", color: "#8b5cf6", api: "/api/node2" },
-      { id: "node-3", name: "Node 3", color: "#a78bfa", api: "/api/node3" },
-      { id: "node-4", name: "Node 4", color: "#c084fc", api: "/api/node4" },
-      { id: "node-5", name: "Node 5", color: "#818cf8", api: "/api/node5" },
-      { id: "node-6", name: "Node 6", color: "#67e8f9", api: "/api/node6" },
+    const NODE_COLORS = [
+      "#6366f1","#8b5cf6","#a78bfa","#c084fc","#818cf8","#67e8f9",
+      "#f472b6","#fb923c","#facc15","#4ade80","#2dd4bf","#38bdf8",
+      "#e879f9","#fb7185","#a3e635","#34d399","#22d3ee","#a5b4fc",
+      "#fbbf24","#f87171","#86efac","#7dd3fc","#d946ef","#f97316",
+      "#10b981","#6ee7b7","#93c5fd","#c4b5fd","#fca5a5","#bef264",
+      "#5eead4",
     ];
+    const NODES = Array.from({ length: 31 }, (_, i) => ({
+      id: `node-${i + 1}`,
+      name: `Node ${i + 1}`,
+      color: NODE_COLORS[i % NODE_COLORS.length],
+      api: `/api/node${i + 1}`,
+    }));
     const POLL_MS = 3000;
 
     // =====================================================================
@@ -257,7 +439,6 @@
     // =====================================================================
     setInterval(() => {
       document.getElementById("clock").textContent = new Date().toLocaleTimeString();
-      document.getElementById("stat-uptime").textContent = fmtTime((Date.now() - startTime) / 1000);
     }, 1000);
 
     // =====================================================================
@@ -425,9 +606,16 @@
     function getPositions() {
       const svg = document.getElementById("network-canvas");
       const w = svg.clientWidth || 800, h = svg.clientHeight || 500;
-      const cx = w/2, cy = h/2, r = Math.min(w,h) * 0.30;
+      const cx = w/2, cy = h/2;
+      // Use two concentric rings for 31 nodes
+      const innerCount = 10, outerCount = NODES.length - innerCount;
+      const rInner = Math.min(w,h) * 0.18;
+      const rOuter = Math.min(w,h) * 0.36;
       return NODES.map((n,i) => {
-        const a = -Math.PI/2 + (i * 2 * Math.PI) / NODES.length;
+        let r, count, idx;
+        if (i < innerCount) { r = rInner; count = innerCount; idx = i; }
+        else { r = rOuter; count = outerCount; idx = i - innerCount; }
+        const a = -Math.PI/2 + (idx * 2 * Math.PI) / count;
         return { ...n, x: cx + r*Math.cos(a), y: cy + r*Math.sin(a) };
       });
     }
@@ -438,30 +626,23 @@
       const nodes = document.getElementById("nodes-layer");
       links.innerHTML = ""; nodes.innerHTML = "";
 
-      // Links
-      for (let i = 0; i < pos.length; i++) for (let j = i+1; j < pos.length; j++) {
-        const a = pos[i], b = pos[j];
-        const bothOnline = (nodesState[a.id]?.online) && (nodesState[b.id]?.online);
-        const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-        line.setAttribute("x1",a.x); line.setAttribute("y1",a.y);
-        line.setAttribute("x2",b.x); line.setAttribute("y2",b.y);
-        line.setAttribute("stroke", bothOnline ? "#6366f1" : "#ef4444");
-        line.setAttribute("stroke-opacity", bothOnline ? "0.25" : "0.1");
-        line.setAttribute("stroke-width", bothOnline ? "2" : "1");
-        line.setAttribute("stroke-dasharray", "6,4");
-        links.appendChild(line);
-
-        // Data flow label on link
-        if (bothOnline) {
-          const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
-          const txt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-          txt.setAttribute("x", mx); txt.setAttribute("y", my - 6);
-          txt.setAttribute("text-anchor", "middle");
-          txt.setAttribute("fill", "#475569"); txt.setAttribute("font-size", "8");
-          txt.setAttribute("font-family", "'JetBrains Mono', monospace");
-          txt.textContent = "P2P";
-          links.appendChild(txt);
-        }
+      // Links — connect each node to its 3 nearest neighbors to avoid clutter
+      for (let i = 0; i < pos.length; i++) {
+        const dists = pos.map((p, j) => ({ j, d: Math.hypot(p.x - pos[i].x, p.y - pos[i].y) }))
+          .filter(d => d.j !== i).sort((a, b) => a.d - b.d).slice(0, 3);
+        dists.forEach(({ j }) => {
+          if (j < i) return; // avoid duplicate lines
+          const a = pos[i], b = pos[j];
+          const bothOnline = (nodesState[a.id]?.online) && (nodesState[b.id]?.online);
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("x1",a.x); line.setAttribute("y1",a.y);
+          line.setAttribute("x2",b.x); line.setAttribute("y2",b.y);
+          line.setAttribute("stroke", bothOnline ? "#6366f1" : "#ef4444");
+          line.setAttribute("stroke-opacity", bothOnline ? "0.2" : "0.08");
+          line.setAttribute("stroke-width", bothOnline ? "1.5" : "1");
+          line.setAttribute("stroke-dasharray", "4,3");
+          links.appendChild(line);
+        });
       }
 
       // Nodes
@@ -478,44 +659,36 @@
         // Pulse ring
         if (online) {
           const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-          ring.setAttribute("r","36"); ring.setAttribute("fill","none");
-          ring.setAttribute("stroke", n.color); ring.setAttribute("stroke-width","1.5"); ring.setAttribute("opacity","0.3");
+          ring.setAttribute("r","22"); ring.setAttribute("fill","none");
+          ring.setAttribute("stroke", n.color); ring.setAttribute("stroke-width","1"); ring.setAttribute("opacity","0.3");
           ring.classList.add("ping-ring"); g.appendChild(ring);
         }
 
         // Outer ring
         const outer = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        outer.setAttribute("r","32"); outer.setAttribute("fill", online ? "#0f172a" : "#1e1b2e");
+        outer.setAttribute("r","18"); outer.setAttribute("fill", online ? "#0f172a" : "#1e1b2e");
         outer.setAttribute("stroke", online ? n.color : "#ef4444");
-        outer.setAttribute("stroke-width", online ? "3" : "2");
+        outer.setAttribute("stroke-width", online ? "2" : "1.5");
         outer.setAttribute("filter","url(#glow)"); g.appendChild(outer);
 
         // Status dot
         const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        dot.setAttribute("r","4"); dot.setAttribute("cy","-16");
+        dot.setAttribute("r","3"); dot.setAttribute("cy","-10");
         dot.setAttribute("fill", online ? "#22c55e" : "#ef4444"); g.appendChild(dot);
 
         // Name
         const name = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        name.setAttribute("text-anchor","middle"); name.setAttribute("dy","-2");
-        name.setAttribute("fill","#e2e8f0"); name.setAttribute("font-size","11"); name.setAttribute("font-weight","600");
+        name.setAttribute("text-anchor","middle"); name.setAttribute("dy","1");
+        name.setAttribute("fill","#e2e8f0"); name.setAttribute("font-size","7"); name.setAttribute("font-weight","600");
         name.setAttribute("font-family","'JetBrains Mono', monospace");
-        name.textContent = n.name; g.appendChild(name);
+        name.textContent = `N${parseInt(n.name.split(' ')[1])}`; g.appendChild(name);
 
         // Chain length
         const sub = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        sub.setAttribute("text-anchor","middle"); sub.setAttribute("dy","12");
-        sub.setAttribute("fill","#64748b"); sub.setAttribute("font-size","9");
+        sub.setAttribute("text-anchor","middle"); sub.setAttribute("dy","10");
+        sub.setAttribute("fill","#64748b"); sub.setAttribute("font-size","6");
         sub.setAttribute("font-family","'JetBrains Mono', monospace");
         sub.textContent = `${s.chainLength ?? 0} blk`; g.appendChild(sub);
-
-        // Tokens below node
-        const tokensOnNode = (s.chain || []).reduce((sum,b) => sum + b.transactions.filter(t=>t.sender==="MINING_REWARD").reduce((s2,t)=>s2+t.amount,0), 0);
-        const tkn = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        tkn.setAttribute("text-anchor","middle"); tkn.setAttribute("dy","50");
-        tkn.setAttribute("fill","#22c55e"); tkn.setAttribute("font-size","10"); tkn.setAttribute("font-weight","600");
-        tkn.setAttribute("font-family","'JetBrains Mono', monospace");
-        tkn.textContent = `${tokensOnNode.toFixed(1)} ATL`; g.appendChild(tkn);
 
         nodes.appendChild(g);
       });
@@ -530,9 +703,9 @@
       if (!from || !to) return;
       const layer = document.getElementById("particles-layer");
       const p = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      p.setAttribute("r","5"); p.setAttribute("fill","#fbbf24"); p.setAttribute("filter","url(#glow-strong)");
+      p.setAttribute("r","3"); p.setAttribute("fill","#fbbf24"); p.setAttribute("filter","url(#glow-strong)");
       const trail = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      trail.setAttribute("r","8"); trail.setAttribute("fill","#fbbf24"); trail.setAttribute("opacity","0.15");
+      trail.setAttribute("r","5"); trail.setAttribute("fill","#fbbf24"); trail.setAttribute("opacity","0.15");
       layer.appendChild(trail); layer.appendChild(p);
       const dur = 1200, t0 = performance.now();
       (function anim(now) {
@@ -737,11 +910,8 @@
       }
       while (txCountHistory.length > 60) txCountHistory.shift();
 
-      // Chain sync
-      const synced = chainLengths.filter(l => l > 0).every(l => l === chainLengths.find(x => x > 0));
-      const syncEl = document.getElementById("stat-sync");
-      syncEl.textContent = onlineCount === 0 ? "--" : synced ? "SYNCED" : "DIVERGED";
-      syncEl.className = `text-lg font-bold mono ${synced ? 'text-green-400' : 'text-amber-400'}`;
+      // Fetch stats from first online node
+      fetchStats();
 
       // Connection status
       const connDot = document.getElementById("conn-dot");
@@ -759,13 +929,410 @@
     }
 
     // =====================================================================
+    // NODE DROPDOWNS (populate all modal node selects)
+    // =====================================================================
+    function populateNodeDropdowns() {
+      const selects = ["wallet-node", "transfer-node", "faucet-node", "balance-node"];
+      selects.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = NODES.map((n, i) => `<option value="${i}">${n.name}</option>`).join("");
+      });
+      // Mine buttons
+      const mineContainer = document.getElementById("mine-buttons");
+      if (mineContainer) {
+        mineContainer.innerHTML = NODES.map((n, i) =>
+          `<button onclick="mineOn(${i})" class="btn btn-success text-[10px]">${n.name}</button>`
+        ).join("") + `<button onclick="mineOnAll()" class="col-span-4 btn btn-primary">Mine on ALL nodes</button>`;
+      }
+    }
+    populateNodeDropdowns();
+
+    // =====================================================================
+    // WALLET FUNCTIONS
+    // =====================================================================
+    async function createWallet() {
+      const nodeIdx = parseInt(document.getElementById("wallet-node").value);
+      const label = document.getElementById("wallet-label").value.trim();
+      const el = document.getElementById("wallet-create-result");
+      el.innerHTML = '<span class="text-slate-500">Creating wallet...</span>';
+      try {
+        const res = await fetch(`${NODES[nodeIdx].api}/wallet/create`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ label }),
+          signal: AbortSignal.timeout(5000),
+        });
+        const data = await res.json();
+        el.innerHTML = `<div class="bg-slate-800 rounded-lg p-2 border border-emerald-800/40">
+          <p class="text-emerald-400 text-[10px] mb-1">Wallet created!</p>
+          <p class="text-[10px] text-slate-500">Address:</p>
+          <p class="text-xs text-slate-200 break-all mb-1">${data.address}</p>
+          <p class="text-[10px] text-slate-500">Private Key (save this!):</p>
+          <p class="text-[10px] text-amber-400 break-all">${data.private_key}</p>
+        </div>`;
+        logEvent(`Wallet created on ${NODES[nodeIdx].name}: ${truncAddr(data.address)}`, "success");
+        document.getElementById("wallet-label").value = "";
+        refreshWalletList();
+      } catch (e) {
+        el.innerHTML = `<span class="text-red-400">Error: ${e.message}</span>`;
+      }
+    }
+
+    async function refreshWalletList() {
+      const nodeIdx = parseInt(document.getElementById("wallet-node").value);
+      const el = document.getElementById("wallet-list");
+      el.innerHTML = '<p class="text-xs text-slate-500 text-center py-2">Loading...</p>';
+      try {
+        const res = await fetch(`${NODES[nodeIdx].api}/wallets`, { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        if (data.wallets.length === 0) {
+          el.innerHTML = '<p class="text-xs text-slate-600 text-center py-4">No wallets on this node yet</p>';
+          return;
+        }
+        el.innerHTML = data.wallets.map(w => `
+          <div class="bg-slate-800/60 rounded-lg p-2.5 border border-slate-800">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-medium text-slate-300">${w.label || 'Unnamed'}</span>
+              <span class="text-sm font-bold mono text-emerald-400">${w.balance.toFixed(2)} ATL</span>
+            </div>
+            <p class="text-[10px] mono text-slate-500 break-all">${w.address}</p>
+          </div>
+        `).join("");
+      } catch (e) {
+        el.innerHTML = `<p class="text-xs text-red-400 text-center py-2">Error: ${e.message}</p>`;
+      }
+    }
+
+    // =====================================================================
+    // TRANSFER FUNCTIONS
+    // =====================================================================
+    async function loadTransferWallets() {
+      const nodeIdx = parseInt(document.getElementById("transfer-node").value);
+      const el = document.getElementById("transfer-from");
+      el.innerHTML = '<option value="">Loading wallets...</option>';
+      try {
+        const res = await fetch(`${NODES[nodeIdx].api}/wallets`, { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        if (data.wallets.length === 0) {
+          el.innerHTML = '<option value="">No wallets — create one first</option>';
+          return;
+        }
+        el.innerHTML = '<option value="">Select a wallet...</option>' +
+          data.wallets.map(w => `<option value="${w.address}">${w.label || truncAddr(w.address)} (${w.balance.toFixed(2)} ATL)</option>`).join("");
+      } catch (e) {
+        el.innerHTML = '<option value="">Error loading wallets</option>';
+      }
+    }
+
+    async function executeTransfer() {
+      const nodeIdx = parseInt(document.getElementById("transfer-node").value);
+      const from = document.getElementById("transfer-from").value;
+      const to = document.getElementById("transfer-to").value.trim();
+      const amount = parseFloat(document.getElementById("transfer-amount").value);
+      const el = document.getElementById("transfer-result");
+
+      if (!from || !to || !amount) {
+        el.innerHTML = '<span class="text-red-400">All fields are required</span>';
+        return;
+      }
+
+      el.innerHTML = '<span class="text-slate-500">Sending transfer & mining block...</span>';
+      try {
+        const res = await fetch(`${NODES[nodeIdx].api}/transfer`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ from_address: from, to_address: to, amount }),
+          signal: AbortSignal.timeout(120000),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          el.innerHTML = `<span class="text-red-400">${data.error}</span>`;
+          return;
+        }
+        el.innerHTML = `<div class="bg-slate-800 rounded-lg p-2 border border-emerald-800/40">
+          <p class="text-emerald-400 text-[10px]">Transfer confirmed in block #${data.block_index}</p>
+          <p class="text-[10px] text-slate-400">${truncAddr(data.from)} → ${truncAddr(data.to)}: ${data.amount} ATL</p>
+        </div>`;
+        logEvent(`Transfer: ${truncAddr(from)} → ${truncAddr(to)} (${amount} ATL) — block #${data.block_index}`, "success");
+        poll();
+        loadTransferWallets();
+      } catch (e) {
+        el.innerHTML = `<span class="text-red-400">Error: ${e.message}</span>`;
+      }
+    }
+
+    // =====================================================================
+    // FAUCET FUNCTIONS
+    // =====================================================================
+    async function loadFaucetAddresses() {
+      const nodeIdx = parseInt(document.getElementById("faucet-node").value);
+      const el = document.getElementById("faucet-known");
+      el.innerHTML = '<option value="">-- Pick from known wallets --</option>';
+      try {
+        const res = await fetch(`${NODES[nodeIdx].api}/wallets`, { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        data.wallets.forEach(w => {
+          el.innerHTML += `<option value="${w.address}">${w.label || truncAddr(w.address)} (${w.balance.toFixed(2)} ATL)</option>`;
+        });
+      } catch {}
+    }
+
+    // Sync faucet-known dropdown to faucet-address input
+    document.getElementById("faucet-known").addEventListener("change", function() {
+      if (this.value) document.getElementById("faucet-address").value = this.value;
+    });
+
+    async function requestFaucet() {
+      const nodeIdx = parseInt(document.getElementById("faucet-node").value);
+      const address = document.getElementById("faucet-address").value.trim();
+      const amount = parseFloat(document.getElementById("faucet-amount").value);
+      const el = document.getElementById("faucet-result");
+
+      if (!address) {
+        el.innerHTML = '<span class="text-red-400">Address is required</span>';
+        return;
+      }
+
+      el.innerHTML = '<span class="text-slate-500">Requesting tokens & mining block...</span>';
+      try {
+        const res = await fetch(`${NODES[nodeIdx].api}/faucet`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address, amount }),
+          signal: AbortSignal.timeout(120000),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          el.innerHTML = `<span class="text-red-400">${data.error}</span>`;
+          return;
+        }
+        el.innerHTML = `<div class="bg-slate-800 rounded-lg p-2 border border-emerald-800/40">
+          <p class="text-emerald-400 text-[10px]">Faucet delivered ${data.amount} ATL in block #${data.block_index}</p>
+          <p class="text-[10px] text-slate-400">New balance: <span class="text-emerald-400 font-bold">${data.new_balance} ATL</span></p>
+        </div>`;
+        logEvent(`Faucet: ${data.amount} ATL → ${truncAddr(address)} — block #${data.block_index}`, "success");
+        poll();
+      } catch (e) {
+        el.innerHTML = `<span class="text-red-400">Error: ${e.message}</span>`;
+      }
+    }
+
+    // =====================================================================
+    // STATS FETCH
+    // =====================================================================
+    async function fetchStats() {
+      // Find first online node
+      const onlineIdx = NODES.findIndex(n => nodesState[n.id]?.online);
+      if (onlineIdx === -1) {
+        document.getElementById("stat-addresses").textContent = "0";
+        document.getElementById("stat-supply").textContent = "0.0";
+        return;
+      }
+      try {
+        const res = await fetch(`${NODES[onlineIdx].api}/stats`, { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        document.getElementById("stat-addresses").textContent = data.circulating_addresses;
+        document.getElementById("stat-supply").textContent = data.total_supply.toFixed(1);
+      } catch {}
+    }
+
+    // =====================================================================
+    // CONSENSUS FUNCTIONS
+    // =====================================================================
+    async function loadConsensusInfo() {
+      const onlineIdx = NODES.findIndex(n => nodesState[n.id]?.online);
+      if (onlineIdx === -1) return;
+      try {
+        const res = await fetch(`${NODES[onlineIdx].api}/consensus`, { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        const el = document.getElementById("consensus-info");
+        el.innerHTML = Object.entries(data).map(([k,v]) =>
+          `<div class="flex justify-between py-0.5"><span class="text-slate-500">${k}:</span><span class="text-slate-200">${typeof v === 'object' ? JSON.stringify(v).slice(0,60) : v}</span></div>`
+        ).join("");
+      } catch {}
+    }
+    async function switchConsensus(engine) {
+      const onlineIdx = NODES.findIndex(n => nodesState[n.id]?.online);
+      if (onlineIdx === -1) return;
+      const el = document.getElementById("consensus-result");
+      el.innerHTML = `<span class="text-slate-500">Switching to ${engine}...</span>`;
+      try {
+        const res = await fetch(`/consensus/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ engine }),
+          signal: AbortSignal.timeout(5000),
+        });
+        const data = await res.json();
+        el.innerHTML = `<span class="text-emerald-400">Switched to ${data.engine || engine}</span>`;
+        logEvent(`Consensus switched to ${engine}`, "success");
+        loadConsensusInfo();
+      } catch (e) {
+        el.innerHTML = `<span class="text-red-400">Error: ${e.message}</span>`;
+      }
+    }
+
+    // =====================================================================
+    // CONTRACT FUNCTIONS
+    // =====================================================================
+    async function deployContract() {
+      const owner = document.getElementById("contract-owner").value.trim();
+      const template = document.getElementById("contract-template").value;
+      const el = document.getElementById("contract-deploy-result");
+      if (!owner) { el.innerHTML = '<span class="text-red-400">Owner address required</span>'; return; }
+      el.innerHTML = '<span class="text-slate-500">Deploying...</span>';
+      try {
+        const res = await fetch("/contract/deploy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ owner, template }),
+          signal: AbortSignal.timeout(10000),
+        });
+        const data = await res.json();
+        if (!res.ok) { el.innerHTML = `<span class="text-red-400">${data.error}</span>`; return; }
+        el.innerHTML = `<span class="text-emerald-400">Deployed: ${data.address}</span>`;
+        logEvent(`Contract deployed: ${truncAddr(data.address)} by ${truncAddr(owner)}`, "success");
+        loadContracts();
+      } catch (e) { el.innerHTML = `<span class="text-red-400">${e.message}</span>`; }
+    }
+    async function loadContracts() {
+      const el = document.getElementById("contract-list");
+      try {
+        const res = await fetch("/contracts", { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        if (!data.contracts || data.contracts.length === 0) {
+          el.innerHTML = '<p class="text-xs text-slate-600 text-center py-4">No contracts deployed</p>';
+          return;
+        }
+        el.innerHTML = data.contracts.map(c => `
+          <div class="bg-slate-800/60 rounded-lg p-2.5 border border-slate-800">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-medium text-slate-300">${c.label || 'Contract'}</span>
+              <span class="text-[10px] mono text-slate-500">${new Date(c.created_at*1000).toLocaleTimeString()}</span>
+            </div>
+            <p class="text-[10px] mono text-indigo-400 break-all">${c.address}</p>
+            <p class="text-[10px] mono text-slate-600">Owner: ${truncAddr(c.owner)}</p>
+          </div>
+        `).join("");
+      } catch (e) { el.innerHTML = `<p class="text-xs text-red-400">${e.message}</p>`; }
+    }
+
+    // =====================================================================
+    // STAKING FUNCTIONS
+    // =====================================================================
+    async function doStake() {
+      const address = document.getElementById("stake-address").value.trim();
+      const amount = parseFloat(document.getElementById("stake-amount").value);
+      const el = document.getElementById("stake-result");
+      if (!address || !amount) { el.innerHTML = '<span class="text-red-400">Address and amount required</span>'; return; }
+      el.innerHTML = '<span class="text-slate-500">Staking...</span>';
+      try {
+        const res = await fetch("/stake", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address, amount }), signal: AbortSignal.timeout(5000),
+        });
+        const data = await res.json();
+        if (!res.ok) { el.innerHTML = `<span class="text-red-400">${data.error}</span>`; return; }
+        el.innerHTML = `<span class="text-emerald-400">Staked ${data.amount} ATL from ${truncAddr(data.address)}</span>`;
+        logEvent(`Staked ${data.amount} ATL from ${truncAddr(address)}`, "success");
+        loadStakes();
+      } catch (e) { el.innerHTML = `<span class="text-red-400">${e.message}</span>`; }
+    }
+    async function doUnstake() {
+      const address = document.getElementById("stake-address").value.trim();
+      const el = document.getElementById("stake-result");
+      if (!address) { el.innerHTML = '<span class="text-red-400">Address required</span>'; return; }
+      el.innerHTML = '<span class="text-slate-500">Unstaking...</span>';
+      try {
+        const res = await fetch("/unstake", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address }), signal: AbortSignal.timeout(5000),
+        });
+        const data = await res.json();
+        if (!res.ok) { el.innerHTML = `<span class="text-red-400">${data.error}</span>`; return; }
+        el.innerHTML = `<span class="text-emerald-400">Unstaked ${data.returned} ATL to ${truncAddr(address)}</span>`;
+        logEvent(`Unstaked from ${truncAddr(address)}`, "success");
+        loadStakes();
+      } catch (e) { el.innerHTML = `<span class="text-red-400">${e.message}</span>`; }
+    }
+    async function loadStakes() {
+      const el = document.getElementById("stake-list");
+      try {
+        const res = await fetch("/stakes", { signal: AbortSignal.timeout(5000) });
+        const data = await res.json();
+        if (!data.stakes || data.stakes.length === 0) {
+          el.innerHTML = '<p class="text-xs text-slate-600 text-center py-4">No active stakes</p>';
+          return;
+        }
+        el.innerHTML = data.stakes.map(s => `
+          <div class="bg-slate-800/60 rounded-lg p-2.5 border border-slate-800 flex items-center justify-between">
+            <span class="text-[10px] mono text-slate-400">${truncAddr(s.address)}</span>
+            <span class="text-sm font-bold mono text-emerald-400">${s.amount} ATL</span>
+          </div>`).join("");
+      } catch (e) { el.innerHTML = `<p class="text-xs text-red-400">${e.message}</p>`; }
+    }
+
+    // =====================================================================
+    // SIMULATION FUNCTIONS
+    // =====================================================================
+    async function runSimulation(type) {
+      const el = document.getElementById("sim-result");
+      el.textContent = `Running ${type} simulation...`;
+      logEvent(`Simulation started: ${type}`, "warn");
+      try {
+        const res = await fetch(`/simulate/${type}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}), signal: AbortSignal.timeout(30000),
+        });
+        const data = await res.json();
+        el.textContent = JSON.stringify(data, null, 2);
+        logEvent(`Simulation ${type} completed`, "success");
+        poll();
+      } catch (e) {
+        el.textContent = `Error: ${e.message}`;
+        logEvent(`Simulation ${type} failed: ${e.message}`, "error");
+      }
+    }
+
+    // =====================================================================
+    // SSE REAL-TIME EVENTS
+    // =====================================================================
+    function connectSSE() {
+      try {
+        const source = new EventSource("/events");
+        source.onmessage = function(event) {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === "new_block") {
+              logEvent(`[SSE] New block #${data.data?.index || '?'} mined`, "success");
+              poll();
+            } else if (data.type === "new_transaction") {
+              logEvent(`[SSE] New transaction: ${truncAddr(data.data?.sender)} → ${truncAddr(data.data?.recipient)}`, "info");
+            } else if (data.type === "consensus_change") {
+              logEvent(`[SSE] Consensus changed to ${data.data?.engine || '?'}`, "warn");
+              loadConsensusInfo();
+            } else {
+              logEvent(`[SSE] ${data.type}: ${JSON.stringify(data.data).slice(0, 80)}`, "info");
+            }
+          } catch {}
+        };
+        source.onerror = function() {
+          source.close();
+          setTimeout(connectSSE, 5000);
+        };
+      } catch {}
+    }
+
+    // =====================================================================
     // INIT
     // =====================================================================
     drawNetwork();
     poll();
     setInterval(poll, POLL_MS);
     window.addEventListener("resize", drawNetwork);
-    logEvent("Atlas Network Monitor initialized", "info");
+    connectSSE();
+    logEvent("Atlas Network Monitor v2.0 initialized", "info");
   </script>
 </body>
 </html>
