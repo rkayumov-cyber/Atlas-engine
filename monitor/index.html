@@ -27,6 +27,67 @@
     .btn-danger { @apply bg-red-600/20 border-red-500/40 hover:bg-red-600/60 text-red-400; }
     .modal-backdrop { background: rgba(2,6,23,0.8); backdrop-filter: blur(4px); }
     .sparkline-bar { transition: height 0.3s ease; }
+
+    /* Tooltip system */
+    .has-tooltip { position: relative; cursor: help; }
+    .has-tooltip::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      font-size: 11px;
+      font-weight: 400;
+      line-height: 1.4;
+      padding: 6px 10px;
+      border-radius: 6px;
+      white-space: normal;
+      width: max-content;
+      max-width: 220px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+    .has-tooltip:hover::after { opacity: 1; }
+    .tip-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: rgba(100,116,139,0.25); color: #94a3b8;
+      font-size: 9px; font-weight: 700; margin-left: 4px;
+      vertical-align: middle; flex-shrink: 0;
+    }
+
+    /* Guide modal cards */
+    .guide-card summary {
+      cursor: pointer; list-style: none; padding: 10px 14px;
+      font-size: 13px; font-weight: 600; color: #e2e8f0;
+      display: flex; align-items: center; gap: 10px;
+      border-radius: 8px; transition: background 0.15s;
+    }
+    .guide-card summary:hover { background: rgba(100,116,139,0.1); }
+    .guide-card summary::-webkit-details-marker { display: none; }
+    .guide-card summary::before {
+      content: "\25B6"; font-size: 9px; color: #64748b;
+      transition: transform 0.2s ease;
+    }
+    .guide-card[open] summary::before { transform: rotate(90deg); }
+    .guide-card .guide-body {
+      padding: 4px 14px 14px 38px;
+      font-size: 12px; line-height: 1.7; color: #94a3b8;
+    }
+    .guide-accent {
+      width: 4px; border-radius: 2px; flex-shrink: 0; align-self: stretch;
+    }
+    .edu-hint {
+      background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 8px; padding: 8px 12px; margin-bottom: 12px;
+      font-size: 11px; line-height: 1.5; color: #a5b4fc;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-gray-100 min-h-screen overflow-x-hidden">
@@ -50,6 +111,7 @@
       <button onclick="openModal('contract-modal')" class="btn btn-warning">Contracts</button>
       <button onclick="openModal('staking-modal');loadStakes()" class="btn btn-success">Staking</button>
       <button onclick="openModal('simulation-modal')" class="btn btn-danger">Simulations</button>
+      <button onclick="openModal('guide-modal')" class="btn border-sky-500/40 bg-sky-600/20 hover:bg-sky-600/60 text-sky-400" title="Learn about blockchain concepts">&#128218; Learn</button>
       <a href="/explorer" class="btn btn-primary">Explorer</a>
       <button onclick="triggerConsensus()" class="btn btn-primary" id="consensus-btn">Sync</button>
       <div class="flex items-center gap-2 text-xs text-slate-400">
@@ -68,35 +130,35 @@
       <!-- Stats Bar (8 metrics) -->
       <div class="grid grid-cols-4 xl:grid-cols-8 gap-2 p-3 border-b border-slate-800/40">
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Nodes</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Nodes <span class="tip-icon has-tooltip" data-tip="Number of blockchain nodes currently online out of 31 total in the network.">?</span></p>
           <p class="text-lg font-bold mono text-green-400" id="stat-nodes">0/31</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Max Chain</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Max Chain <span class="tip-icon has-tooltip" data-tip="Length of the longest blockchain across all nodes. All nodes should converge to this height.">?</span></p>
           <p class="text-lg font-bold mono text-indigo-400" id="stat-blocks">0</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Total TXs</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Total TXs <span class="tip-icon has-tooltip" data-tip="Total number of transactions recorded across all blocks, including mining rewards and transfers.">?</span></p>
           <p class="text-lg font-bold mono text-amber-400" id="stat-txs">0</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Tokens Mined</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Tokens Mined <span class="tip-icon has-tooltip" data-tip="Total ATL tokens created through mining rewards. Miners earn tokens for adding valid blocks.">?</span></p>
           <p class="text-lg font-bold mono text-emerald-400" id="stat-tokens">0.0</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Avg Block Time</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Avg Block Time <span class="tip-icon has-tooltip" data-tip="Average time between the last 20 blocks. Lower = faster block production.">?</span></p>
           <p class="text-lg font-bold mono text-cyan-400" id="stat-blocktime">--</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">TPS (recent)</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">TPS (recent) <span class="tip-icon has-tooltip" data-tip="Transactions Per Second — measures how many transactions the network processes recently.">?</span></p>
           <p class="text-lg font-bold mono text-pink-400" id="stat-tps">0.0</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Addresses</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Addresses <span class="tip-icon has-tooltip" data-tip="Number of unique wallet addresses that have sent or received ATL tokens.">?</span></p>
           <p class="text-lg font-bold mono text-violet-400" id="stat-addresses">0</p>
         </div>
         <div class="bg-slate-900/60 rounded-lg px-3 py-2 border border-slate-800/40">
-          <p class="text-[10px] uppercase tracking-wider text-slate-500">Total Supply</p>
+          <p class="text-[10px] uppercase tracking-wider text-slate-500">Total Supply <span class="tip-icon has-tooltip" data-tip="Total ATL tokens in circulation. Increases each time a block is mined and a reward is issued.">?</span></p>
           <p class="text-lg font-bold mono text-yellow-400" id="stat-supply">0.0</p>
         </div>
       </div>
@@ -175,6 +237,7 @@
   <div id="mine-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[520px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
       <h3 class="text-sm font-bold mb-4">Mine a Block</h3>
+      <div class="edu-hint">Mining is the process of solving a cryptographic puzzle (Proof of Work) to add a new block to the chain. The miner who solves it first earns a token reward.</div>
       <p class="text-xs text-slate-400 mb-3">Select which node should mine the next block:</p>
       <div class="grid grid-cols-4 gap-2 mb-4" id="mine-buttons"></div>
       <div id="mine-result" class="text-xs mono text-slate-400 min-h-[20px] mb-3"></div>
@@ -216,6 +279,7 @@
   <div id="wallet-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[480px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
       <h3 class="text-sm font-bold mb-4">Wallet Manager</h3>
+      <div class="edu-hint">Wallets use ECDSA key pairs — a private key (kept secret) signs transactions, and a public key derives your unique address. Never share your private key.</div>
       <div class="mb-4">
         <p class="text-xs text-slate-400 mb-2">Create a new wallet:</p>
         <div class="flex gap-2 mb-2">
@@ -241,6 +305,7 @@
   <div id="transfer-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[420px] p-5 shadow-2xl">
       <h3 class="text-sm font-bold mb-4">Transfer ATL</h3>
+      <div class="edu-hint">Transfers send ATL tokens between wallets. Each transfer is cryptographically signed, added to the mempool, and confirmed when included in a mined block.</div>
       <div class="space-y-3 mb-4">
         <div>
           <label class="text-[10px] uppercase tracking-wider text-slate-500 block mb-1">Node</label>
@@ -271,6 +336,7 @@
   <div id="faucet-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[420px] p-5 shadow-2xl">
       <h3 class="text-sm font-bold mb-4">Token Faucet</h3>
+      <div class="edu-hint">A faucet distributes free test tokens so you can experiment with transfers and staking without needing to mine first. Common in testnets and educational blockchains.</div>
       <p class="text-xs text-slate-400 mb-3">Request free ATL tokens (max 100 per request):</p>
       <div class="space-y-3 mb-4">
         <div>
@@ -299,6 +365,7 @@
   <div id="consensus-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[420px] p-5 shadow-2xl">
       <h3 class="text-sm font-bold mb-4">Consensus Engine</h3>
+      <div class="edu-hint">Consensus is how nodes agree on one valid chain. Atlas supports PoW (computational puzzles), PoS (stake-weighted selection), and PBFT (voting rounds).</div>
       <div id="consensus-info" class="mb-4 bg-slate-800/60 rounded-lg p-3 border border-slate-800 text-xs mono text-slate-300">Loading...</div>
       <p class="text-xs text-slate-400 mb-3">Switch consensus engine:</p>
       <div class="grid grid-cols-3 gap-2 mb-4">
@@ -315,6 +382,7 @@
   <div id="contract-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[500px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
       <h3 class="text-sm font-bold mb-4">Smart Contracts</h3>
+      <div class="edu-hint">Smart contracts are self-executing programs stored on the blockchain. Deploy a contract to define rules (e.g., token logic, escrow), then call its methods.</div>
       <div class="mb-4">
         <p class="text-xs text-slate-400 mb-2">Deploy from template:</p>
         <div class="flex gap-2 mb-2">
@@ -340,6 +408,7 @@
   <div id="staking-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[480px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
       <h3 class="text-sm font-bold mb-4">Staking (PoS)</h3>
+      <div class="edu-hint">In Proof of Stake, validators lock up tokens as collateral. The more you stake, the higher your chance of being selected to create the next block and earn rewards.</div>
       <p class="text-xs text-slate-400 mb-3">Stake tokens to participate in Proof-of-Stake consensus:</p>
       <div class="space-y-3 mb-4">
         <div>
@@ -369,6 +438,7 @@
   <div id="simulation-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
     <div class="bg-slate-900 border border-slate-700 rounded-xl w-[520px] max-h-[80vh] p-5 shadow-2xl overflow-y-auto feed">
       <h3 class="text-sm font-bold mb-4">Attack Simulations</h3>
+      <div class="edu-hint">Attack simulations demonstrate how real blockchain vulnerabilities work in a safe environment. Understanding attacks is essential for building secure decentralized systems.</div>
       <p class="text-xs text-slate-400 mb-4">Run educational attack simulations against the network:</p>
       <div class="grid grid-cols-2 gap-3 mb-4">
         <button onclick="runSimulation('double-spend')" class="bg-slate-800/60 hover:bg-slate-800 border border-slate-700 rounded-lg p-3 text-left transition">
@@ -392,6 +462,141 @@
         Select a simulation to run...
       </div>
       <button onclick="closeModal('simulation-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200">Close</button>
+    </div>
+  </div>
+
+  <!-- ============ GUIDE MODAL ============ -->
+  <div id="guide-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center modal-backdrop">
+    <div class="bg-slate-900 border border-slate-700 rounded-xl w-[600px] max-h-[85vh] p-5 shadow-2xl overflow-y-auto feed">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-sm font-bold">&#128218; Atlas Engine — Learning Guide</h3>
+        <button onclick="closeModal('guide-modal')" class="text-slate-500 hover:text-slate-300 text-lg">&times;</button>
+      </div>
+      <p class="text-xs text-slate-400 mb-4">Explore these topics to understand how the Atlas blockchain works. Click a section to expand it.</p>
+
+      <div class="space-y-2">
+
+        <!-- What is Atlas Engine? -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-indigo-500"></span> What is Atlas Engine?</summary>
+          <div class="guide-body">
+            Atlas Engine is a modular, educational blockchain system written in Python. It simulates a real decentralized network with multiple nodes that communicate peer-to-peer, mine blocks, process transactions, and reach consensus — all running locally via Docker.
+            <br/><br/>
+            The Network Monitor (this dashboard) gives you a real-time view of the entire network: node health, chain growth, transaction flow, and more. Use it to experiment with mining, transfers, staking, and even attack simulations.
+          </div>
+        </details>
+
+        <!-- Blocks & Mining -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-emerald-500"></span> Blocks &amp; Mining</summary>
+          <div class="guide-body">
+            A <strong class="text-slate-200">block</strong> is a container that holds a batch of transactions, a timestamp, a reference to the previous block's hash, and a <strong class="text-slate-200">proof</strong> (nonce).
+            <br/><br/>
+            <strong class="text-slate-200">Mining</strong> is the process of finding a valid proof that, when hashed with the block data, produces a hash meeting the difficulty target (e.g., starting with "0000"). This is called <strong class="text-slate-200">Proof of Work (PoW)</strong>.
+            <br/><br/>
+            The miner who finds the proof first gets to add the block and earns a <strong class="text-slate-200">mining reward</strong> (coinbase transaction). This incentivizes nodes to participate honestly.
+          </div>
+        </details>
+
+        <!-- Transactions -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-amber-500"></span> Transactions</summary>
+          <div class="guide-body">
+            A transaction records the transfer of ATL tokens from one address to another. Each transaction contains:
+            <br/><br/>
+            &bull; <strong class="text-slate-200">Sender</strong> — the address sending tokens (or "MINING_REWARD" for coinbase)<br/>
+            &bull; <strong class="text-slate-200">Recipient</strong> — the destination address<br/>
+            &bull; <strong class="text-slate-200">Amount</strong> — how many ATL tokens to transfer<br/>
+            &bull; <strong class="text-slate-200">Signature</strong> — a cryptographic proof that the sender authorized this transfer<br/>
+            <br/>
+            Pending transactions sit in the <strong class="text-slate-200">mempool</strong> until a miner includes them in the next block. Once mined, the transaction is confirmed and immutable.
+          </div>
+        </details>
+
+        <!-- Consensus Algorithms -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-cyan-500"></span> Consensus Algorithms</summary>
+          <div class="guide-body">
+            Consensus is how distributed nodes agree on one "true" version of the blockchain. Atlas supports three engines:
+            <br/><br/>
+            <strong class="text-slate-200">Proof of Work (PoW)</strong> — Nodes compete to solve computational puzzles. Secure but energy-intensive. Used by Bitcoin.<br/><br/>
+            <strong class="text-slate-200">Proof of Stake (PoS)</strong> — Validators are selected proportional to their staked tokens. Energy-efficient. Used by Ethereum 2.0.<br/><br/>
+            <strong class="text-slate-200">PBFT (Practical Byzantine Fault Tolerance)</strong> — Nodes vote in rounds to reach agreement. Fast finality, works well with smaller networks. Used in permissioned chains.<br/><br/>
+            You can switch engines live using the Consensus panel to compare their behavior.
+          </div>
+        </details>
+
+        <!-- Wallets & Addresses -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-violet-500"></span> Wallets &amp; Addresses</summary>
+          <div class="guide-body">
+            A wallet is a key pair generated using <strong class="text-slate-200">ECDSA</strong> (Elliptic Curve Digital Signature Algorithm):
+            <br/><br/>
+            &bull; <strong class="text-slate-200">Private key</strong> — a secret random number used to sign transactions. Never share it.<br/>
+            &bull; <strong class="text-slate-200">Public key</strong> — derived from the private key, used to verify signatures.<br/>
+            &bull; <strong class="text-slate-200">Address</strong> — a shorter hash of the public key, used as your identity on the chain.<br/>
+            <br/>
+            When you send tokens, your wallet signs the transaction with your private key. Other nodes verify the signature using your public key to confirm you authorized the transfer.
+          </div>
+        </details>
+
+        <!-- Smart Contracts -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-pink-500"></span> Smart Contracts</summary>
+          <div class="guide-body">
+            Smart contracts are programs stored on the blockchain that execute automatically when called. In Atlas, the <strong class="text-slate-200">ContractVM</strong> processes contract bytecode.
+            <br/><br/>
+            &bull; <strong class="text-slate-200">Deploy</strong> — upload a contract (from a template like Token or Escrow) to the chain. It gets its own address.<br/>
+            &bull; <strong class="text-slate-200">Call</strong> — execute a method on a deployed contract, potentially changing its state.<br/>
+            <br/>
+            Contracts enable programmable money: automatic escrow, custom token standards, governance voting, and more — all without a central authority.
+          </div>
+        </details>
+
+        <!-- Staking -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-emerald-400"></span> Staking</summary>
+          <div class="guide-body">
+            Staking locks your ATL tokens as collateral to participate in <strong class="text-slate-200">Proof of Stake</strong> consensus. Key concepts:
+            <br/><br/>
+            &bull; <strong class="text-slate-200">Validator selection</strong> — the probability of being chosen to create the next block is proportional to your stake.<br/>
+            &bull; <strong class="text-slate-200">Minimum stake</strong> — a threshold amount required to become a validator.<br/>
+            &bull; <strong class="text-slate-200">Unstaking</strong> — returns your staked tokens, removing you from the validator set.<br/>
+            <br/>
+            Staking aligns incentives: validators who act honestly earn rewards, while malicious validators risk losing their stake (slashing).
+          </div>
+        </details>
+
+        <!-- Network & Peers -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-sky-500"></span> Network &amp; Peers</summary>
+          <div class="guide-body">
+            Atlas runs a <strong class="text-slate-200">peer-to-peer (P2P)</strong> network where each node maintains its own copy of the blockchain.
+            <br/><br/>
+            &bull; <strong class="text-slate-200">Gossip protocol</strong> — nodes broadcast new blocks and transactions to their peers, propagating data across the network.<br/>
+            &bull; <strong class="text-slate-200">Chain resolution</strong> — when nodes disagree, the longest valid chain wins (in PoW). Hit "Sync" to trigger resolution across all nodes.<br/>
+            &bull; <strong class="text-slate-200">Fork detection</strong> — temporary forks occur when two nodes mine blocks simultaneously. Consensus resolves which fork survives.<br/>
+            <br/>
+            The network visualization shows P2P links (indigo lines) and transaction flow (amber particles) between nodes.
+          </div>
+        </details>
+
+        <!-- Attack Simulations -->
+        <details class="guide-card border border-slate-800 rounded-lg">
+          <summary><span class="guide-accent bg-red-500"></span> Attack Simulations</summary>
+          <div class="guide-body">
+            Atlas includes safe, educational attack simulations to demonstrate real blockchain vulnerabilities:
+            <br/><br/>
+            <strong class="text-slate-200">Double Spend</strong> — Attempting to spend the same tokens twice by broadcasting conflicting transactions. The blockchain's consensus mechanism prevents this.<br/><br/>
+            <strong class="text-slate-200">51% Attack</strong> — If one entity controls majority hashpower, they can rewrite the chain. This demonstrates why decentralization matters.<br/><br/>
+            <strong class="text-slate-200">Selfish Mining</strong> — A miner withholds discovered blocks to gain an unfair advantage, eventually releasing a longer private chain.<br/><br/>
+            <strong class="text-slate-200">Step-through Mining</strong> — Watch the mining process happen incrementally, seeing each nonce attempt and hash computation.
+          </div>
+        </details>
+
+      </div>
+
+      <button onclick="closeModal('guide-modal')" class="w-full btn border-slate-700 text-slate-400 hover:text-slate-200 mt-4">Close</button>
     </div>
   </div>
 
